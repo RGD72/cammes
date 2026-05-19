@@ -1,14 +1,50 @@
 {
-  "name": "aiox",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "cammes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CAMMES — Catálogo Multimarcas com Extração Estruturada",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "prepare": "husky"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs"
+  "dependencies": {
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.45.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "lucide-react": "^1.16.0",
+    "next": "15.5.18",
+    "pino": "^9.5.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "tailwind-merge": "^3.6.0",
+    "tw-animate-css": "^1.4.0",
+    "zod": "^3.23.8",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16.0.1",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4.3.3",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.18",
+    "jsdom": "^25.0.1",
+    "prettier": "^3.3.3",
+    "tailwindcss": "^4",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
 }
