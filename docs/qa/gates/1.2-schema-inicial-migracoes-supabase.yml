@@ -1,0 +1,40 @@
+schema: 1
+story: '1.2'
+gate: CONCERNS
+status_reason: >
+  Implementação correta e rastreável ao DDL canônico da arquitetura.
+  Dois concerns não-bloqueantes: (1) política RLS auto-referencial em users_profile requer atenção antes de produção;
+  (2) validação via supabase db reset waivada por ausência de Docker — deve ser executada antes de go-live.
+reviewer: Quinn
+updated: '2026-05-20T18:00:00Z'
+top_issues:
+  - id: SEC-001
+    severity: medium
+    finding: >
+      Política users_profile_admin_read_customers contém subquery que consulta a própria tabela users_profile
+      enquanto RLS está ativo. Em PostgreSQL/Supabase, isso pode causar comportamento inesperado (recursão ou
+      security barrier bypass). Padrão documentado pelo Supabase como problemático.
+    suggested_action: >
+      Antes da Story 5.3 (que usa esta policy em produção), refatorar para uma função SECURITY DEFINER:
+      CREATE FUNCTION is_admin() RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER
+      AS $$ SELECT EXISTS (SELECT 1 FROM users_profile WHERE id = auth.uid() AND role = 'admin') $$;
+      Depois usar: USING (role = 'customer' AND is_admin())
+  - id: TEST-001
+    severity: medium
+    finding: >
+      Task 6 (supabase db reset) waivada — Docker Desktop não disponível no ambiente de desenvolvimento.
+      Nenhuma execução real das migrations foi validada. Os arquivos SQL estão sintaticamente corretos
+      e rastreáveis ao DDL canônico, mas a integração real não foi testada.
+    suggested_action: >
+      Executar supabase start && supabase db reset antes de merge para main ou antes da Story 1.3.
+      Confirmar que supabase migration list exibe 4 entradas como 'applied'.
+  - id: MNT-001
+    severity: low
+    finding: >
+      Coluna logo_url em brands não possui validação de formato URL no nível do banco de dados.
+      Aceita qualquer string TEXT.
+    suggested_action: >
+      Considerar adicionar CHECK (logo_url ~ '^https?://') em migration futura se validação
+      de URL for requisito de segurança. Alternativa: validar na camada de aplicação (Story 2.x).
+waiver:
+  active: false
