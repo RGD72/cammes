@@ -51,8 +51,11 @@ Thumbs.db
 # --- AIOX Framework Local ---
 .aiox-core/local/
 .claude/settings.local.json
+.claude/agent-memory/
 .aiox/install-log.txt
 .aiox/environment-report.*
+.aiox/*.aiox-original
+.aiox/*.aiox-original.*
 
 # --- Backup files ---
 *.backup.*

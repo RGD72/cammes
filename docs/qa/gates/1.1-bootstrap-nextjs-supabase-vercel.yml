@@ -1,0 +1,56 @@
+schema: 1
+story: '1.1'
+gate: CONCERNS
+status_reason: 'Bootstrap entregue com todos os checks automatizados verdes. Concerns não-bloqueantes documentados abaixo.'
+reviewer: 'Quinn'
+updated: '2026-05-20T15:12:00-03:00'
+
+top_issues:
+  - id: 'ENV-001'
+    severity: medium
+    finding: '`npm run` scripts falham localmente com Node.js v24.15.0 — `.bin/next` e `.bin/tsc` são arquivos regulares em vez de symlinks, causando MODULE_NOT_FOUND. Binários funcionam corretamente via `node node_modules/next/dist/bin/next` e `node node_modules/typescript/bin/tsc`. CI usa Node 20 explicitamente e não é afetado.'
+    suggested_action: 'Desenvolvedores devem usar Node 20 LTS conforme documentado no README, ou instalar via `nvm use 20`. Investigar se o `npm install` com Node 24 recriou os bins incorretamente.'
+
+  - id: 'ARCH-001'
+    severity: medium
+    finding: 'Tailwind CSS v4 instalado em vez de v3.4.x especificado no Dev Notes e na tabela do architecture.md. `create-next-app@15` instala v4 por padrão. Não há `tailwind.config.ts` (v4 usa CSS-first com `@import "tailwindcss"` e `@theme inline`).'
+    suggested_action: 'Atualizar architecture.md seção 3.1 para refletir Tailwind v4 como versão definitiva. Garantir que stories futuras usem sintaxe v4 (sem JIT config file).'
+
+  - id: 'DOC-001'
+    severity: low
+    finding: 'README.md contém badge de CI com URL placeholder `your-org/cammes`. Badge não funciona até que o repositório GitHub real seja configurado.'
+    suggested_action: 'Atualizar o badge URL para apontar ao repositório real quando o remote for configurado pelo @devops.'
+
+  - id: 'MNT-001'
+    severity: low
+    finding: '`tw-animate-css@^1.4.0` está em `dependencies` (produção) em vez de `devDependencies`. Adicionado pelo shadcn/ui durante init. Aumenta bundle de produção desnecessariamente.'
+    suggested_action: 'Mover `tw-animate-css` para `devDependencies` em próxima story ou criar chore ticket. Tech debt anotada pelo dev.'
+
+  - id: 'REQ-001'
+    severity: low
+    finding: 'Definition of Done inclui "URL Vercel pública retorna HTTP 200 na página /" — não verificável sem provisionamento manual do Vercel. Por design da story (escopo explicitamente N/A), mas deixa o DoD tecnicamente incompleto até que a integração Vercel↔GitHub seja feita manualmente.'
+    suggested_action: 'Nenhuma ação necessária nesta story. Task 7 (Vercel integration) foi marcada N/A com justificativa. Verificar na primeira story que fizer deploy real.'
+
+waiver:
+  active: false
+
+quality_checks:
+  code_review: PASS
+  unit_tests: PASS      # 2 smoke tests pass (adequado para story de bootstrap sem lógica de negócio)
+  acceptance_criteria: PASS  # ACs 1, 3, 5, 6 totalmente; ACs 2, 4 no limite do escopo automatizável
+  no_regressions: PASS  # Primeira story do projeto
+  performance: PASS     # Build 102 kB First Load JS, 4 static pages
+  security: PASS        # .env.local gitignored, service role key documentada como server-only
+  documentation: PASS   # README e CONTRIBUTING completos
+
+notes: |
+  Story entregue em YOLO mode com 6 auto-decisions documentadas. Todas as decisões autônomas têm
+  justificativas técnicas válidas. O desvio mais relevante (Tailwind v4) requer atualização do
+  architecture.md para evitar confusão em stories futuras. CodeRabbit desabilitado neste projeto
+  (conforme core-config.yaml). Review manual executado por Quinn.
+
+  Verificação local (Node 20 via node direto):
+  - lint: ✅ 0 warnings, 0 errors
+  - typecheck: ✅ 0 erros (TS 5.x strict mode)
+  - test: ✅ 2/2 passed em 2.31s
+  - build: não re-executado (Dev Agent Record confirma 4 static pages, 102 kB, sem erros)
