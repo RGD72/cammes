@@ -57,6 +57,10 @@ Thumbs.db
 .aiox/*.aiox-original
 .aiox/*.aiox-original.*
 
+# --- Supabase CLI local state ---
+supabase/.branches/
+supabase/.temp/
+
 # --- Backup files ---
 *.backup.*
 *.backup
