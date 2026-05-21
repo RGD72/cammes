@@ -1,0 +1,73 @@
+schema: 1
+story: '1.5'
+gate: PASS
+status_reason: >
+  Todos os 5 ACs implementados corretamente como Server Components Next.js App Router.
+  17/17 testes passando, lint e typecheck limpos, middleware inalterado.
+reviewer: Quinn
+updated: '2026-05-21T14:32:00Z'
+
+checks:
+  code_review: PASS
+  unit_tests: PASS
+  acceptance_criteria: PASS
+  no_regressions: PASS
+  performance: PASS
+  security: PASS
+  documentation: PASS
+
+metrics:
+  tests_total: 17
+  tests_passing: 17
+  tests_failing: 0
+  lint_errors: 0
+  typecheck_errors: 0
+  acs_verified: 5
+  acs_total: 5
+
+acs_verified:
+  - ac: AC1
+    description: '/admin com sidebar (Marcas, Pedidos, Configurações) e "Bem-vindo, {full_name}" via Server Component'
+    status: PASS
+  - ac: AC2
+    description: '/brands com header sticky exibindo full_name do cliente e estado vazio "Você ainda não tem marcas disponíveis"'
+    status: PASS
+  - ac: AC3
+    description: 'Middleware inalterado — guards /admin/*, /brands/*, /cart, /orders/* verificados funcionais'
+    status: PASS
+  - ac: AC4
+    description: 'app/admin/layout.tsx com sidebar lateral fixa; app/brands/layout.tsx com header sticky mobile-first'
+    status: PASS
+  - ac: AC5
+    description: 'docs/qa/smoke-epic-1.md criado com 5 fluxos e 34 itens cobrindo Epic 1 completo'
+    status: PASS
+
+top_issues:
+  - id: MNT-001
+    severity: low
+    finding: >
+      Links da sidebar do admin (/admin/brands, /admin/orders, /admin/settings) levam a rotas
+      ainda não implementadas — o admin recebe 404 ao clicar. Comportamento esperado e documentado
+      no Scope OUT da story (Epic 2/3), mas o estado visual não indica que os links são placeholder.
+    suggested_action: >
+      Adicionar atributo aria-disabled ou estilo visual de "em breve" nos links do sidebar
+      ao implementar Epic 2. Não necessário nesta story — scope OUT explícito.
+
+  - id: MNT-002
+    severity: low
+    finding: >
+      BrandsLayout e AdminPage fazem queries separadas a users_profile por request.
+      Para MVP com volume baixo é aceitável — documentado em Dev Notes como trade-off consciente.
+    suggested_action: >
+      Considerar React cache() ou middleware passando role/name via header para eliminar
+      a query duplicada em alta escala. Avaliação pós-MVP.
+
+carry_forward_from_1.4:
+  - id: UX-001
+    status: OPEN
+    note: 'Validação de e-mail vazio no recover-password-form — não escopo desta story'
+  - id: SEC-003
+    status: OPEN
+    note: 'Parâmetro next no /auth/callback sem allowlist — não escopo desta story'
+
+waiver: { active: false }
