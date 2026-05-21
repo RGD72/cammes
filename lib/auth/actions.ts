@@ -54,3 +54,46 @@ export async function logoutAction() {
   await supabase.auth.signOut()
   redirect('/login')
 }
+
+export async function requestPasswordResetAction(
+  _prevState: unknown,
+  formData: FormData,
+): Promise<{ error?: string; success?: string }> {
+  const email = formData.get('email') as string
+  const headersList = await headers()
+  const origin =
+    headersList.get('origin') ?? process.env.NEXT_PUBLIC_SITE_URL ?? ''
+
+  const supabase = await createServerSupabaseClient()
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/callback?next=/reset-password`,
+  })
+
+  // Sempre retorna sucesso — não revela se o e-mail existe (anti-enumeration)
+  return { success: 'Se esse e-mail estiver cadastrado, você receberá um link em breve.' }
+}
+
+export async function updatePasswordAction(
+  _prevState: unknown,
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const password = formData.get('password') as string
+  const confirmPassword = formData.get('confirmPassword') as string
+
+  if (password.length < 8) {
+    return { error: 'Senha deve ter no mínimo 8 caracteres.' }
+  }
+  if (password !== confirmPassword) {
+    return { error: 'As senhas não coincidem.' }
+  }
+
+  const supabase = await createServerSupabaseClient()
+  const { error } = await supabase.auth.updateUser({ password })
+
+  if (error) {
+    return { error: 'Erro ao redefinir senha. O link pode ter expirado.' }
+  }
+
+  await supabase.auth.signOut()
+  redirect('/login?message=password_updated')
+}

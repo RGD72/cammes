@@ -18,6 +18,12 @@ export async function middleware(request: NextRequest) {
   const { supabaseResponse, user, supabase } = await updateSession(request)
   const pathname = request.nextUrl.pathname
 
+  // Rotas públicas de auth — sem guard de sessão
+  const publicAuthRoutes = ['/recover-password', '/reset-password']
+  if (pathname.startsWith('/auth/') || publicAuthRoutes.some((r) => pathname.startsWith(r))) {
+    return supabaseResponse
+  }
+
   if (pathname.startsWith('/login')) {
     if (user) {
       const role = await getRole(supabase, user.id)
