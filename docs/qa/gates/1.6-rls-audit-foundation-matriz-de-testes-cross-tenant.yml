@@ -1,0 +1,99 @@
+schema: 1
+story: '1.6'
+gate: PASS
+status_reason: >
+  Todos os 4 ACs implementados. 17/17 unit tests + 17/17 integration tests passando.
+  Lint e typecheck limpos. CI atualizado com supabase start e npm run test:integration.
+  Bug crítico de recursão infinita nas RLS policies da Story 1.2 descoberto pelos testes
+  e corrigido via migration 20260521000001_rls_fix_infinite_recursion.sql.
+reviewer: Quinn
+updated: '2026-05-21T00:00:00Z'
+
+checks:
+  code_review: PASS
+  unit_tests: PASS
+  acceptance_criteria: PASS
+  no_regressions: PASS
+  performance: PASS
+  security: PASS
+  documentation: PASS
+
+metrics:
+  tests_total: 34
+  tests_passing: 34
+  tests_failing: 0
+  integration_tests_total: 17
+  integration_tests_passing: 17
+  unit_tests_total: 17
+  unit_tests_passing: 17
+  lint_errors: 0
+  typecheck_errors: 0
+  acs_verified: 4
+  acs_total: 4
+
+acs_verified:
+  - ac: AC1
+    description: 'docs/qa/rls-test-matrix.md criado com 3 seções (users_profile, brands, user_brand_access), políticas documentadas, casos positivos/negativos com IDs rastreáveis'
+    status: PASS
+  - ac: AC2
+    description: 'Suite em tests/integration/rls/ cobre os 5 cenários obrigatórios: N-BR-4 (sem acesso), N-BR-1 (cross-admin), N-BR-2 (UPDATE cross-admin), N-UBA-1 (customer INSERT), N-BR-5 (acesso revogado)'
+    status: PASS
+  - ac: AC3
+    description: 'npm run test:integration funcional; CI atualizado com supabase/setup-cli@v1, supabase start, e step Integration Tests com SUPABASE_URL/ANON_KEY/SERVICE_ROLE_KEY; falha bloqueia merge'
+    status: PASS
+  - ac: AC4
+    description: 'docs/architecture/project-decisions/ADR-002-rls-strategy.md criado com status Aceito, rationale, consequências positivas/negativas e referência à matriz'
+    status: PASS
+
+top_issues:
+  - id: RLS-001
+    severity: low
+    finding: >
+      N-UBA-1 e N-UBA-2 usam expect(data).toBeNull() para INSERTs bloqueados por RLS.
+      PostgREST retorna erro (RLS violation) para INSERTs, tornando a assertion correta hoje.
+      Se o comportamento do PostgREST mudar para retornar [] sem erro, o teste passaria
+      incorretamente. O assert de error cobre o caso crítico.
+    suggested_action: >
+      Manter como está — o assert expect(error).not.toBeNull() é o que garante a semântica.
+      Se futuramente PostgREST mudar o comportamento, o assert de error ainda cobre.
+      Aceitável para MVP.
+
+  - id: RLS-002
+    severity: low
+    finding: >
+      users_profile não tem integration tests dedicados (apenas unit coverage indireta).
+      Escopo OUT da story é explícito sobre isso — apenas brands e user_brand_access.
+    suggested_action: >
+      Adicionar tests/integration/rls/users-profile.test.ts em story futura ao expandir
+      permissões de perfil (Epic 2+). Não necessário nesta story.
+
+positive_findings:
+  - id: SEC-FIND-001
+    severity: critical_fix
+    finding: >
+      Integration tests descobriram 3 ciclos de recursão infinita nas policies RLS da Story 1.2
+      que tornavam TODAS as queries nas tabelas brands e user_brand_access não funcionais para
+      usuários autenticados. O bug existia silenciosamente desde a Story 1.2.
+    resolution: >
+      Corrigido via migration 20260521000001_rls_fix_infinite_recursion.sql com 2 funções
+      SECURITY DEFINER: current_user_is_admin() e user_has_active_brand_access().
+      Ambas usam SET search_path = '' e auth.uid() — security semantics preservadas.
+      Este é exatamente o valor de integration tests de RLS: detectar bugs que code review
+      não captura.
+
+  - id: ARCH-FIND-001
+    severity: info
+    finding: >
+      UPSERT em grantAccess (onConflict: user_id,brand_id) é solução correta para
+      re-concessão de acesso revogado — evita violação de PK na re-grant sequence
+      testada em N-BR-5 → P-BR-5.
+
+carry_forward_from_1.5:
+  - id: UX-001
+    status: OPEN
+    note: 'Validação de e-mail vazio no recover-password-form — não escopo desta story'
+  - id: SEC-003
+    status: OPEN
+    note: 'Parâmetro next no /auth/callback sem allowlist — não escopo desta story'
+
+waiver: { active: false }
