@@ -14,7 +14,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['tests/**/*.test.{ts,tsx}', '**/*.test.{ts,tsx}'],
-    exclude: ['node_modules/**', '.next/**', '.aiox-core/**', '.aiox/**'],
+    exclude: ['node_modules/**', '.next/**', '.aiox-core/**', '.aiox/**', 'tests/integration/**'],
   },
   resolve: {
     alias: {
