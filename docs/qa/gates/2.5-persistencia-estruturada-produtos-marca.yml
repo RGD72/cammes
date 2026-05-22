@@ -1,0 +1,55 @@
+schema: 1
+story: '2.5'
+gate: CONCERNS
+status_reason: >
+  Todos os 6 ACs atendidos — migration idempotente, 7/7 testes RLS passando, política
+  products_customer_read refinada com guard brands.published. Concerns não-bloqueantes
+  em documentação (catalog_id nullable e extraction_job_id ausente no data-model-skeleton).
+reviewer: Quinn
+updated: '2026-05-22T17:15:00Z'
+top_issues:
+  - id: DOC-001
+    severity: medium
+    finding: >
+      data-model-skeleton.md documenta catalog_id como Nullable=YES/NULL com ON DELETE SET NULL,
+      mas o schema real define NOT NULL REFERENCES catalogs(id) ON DELETE CASCADE.
+      A coluna extraction_job_id (também NOT NULL) está completamente ausente da tabela de colunas.
+    suggested_action: >
+      Corrigir a linha de catalog_id para Nullable=NO/—/ON DELETE CASCADE e adicionar linha
+      extraction_job_id na tabela de colunas da seção products.
+  - id: MNT-001
+    severity: low
+    finding: >
+      20260521000002_admin_settings.sql (Story 2.1) modificado diretamente para corrigir
+      public.pgp_sym_encrypt → extensions.pgp_sym_encrypt. Em workflow de equipe com DB
+      compartilhado seria preferível migration de fix separada.
+    suggested_action: >
+      Aceitável em local dev com supabase db reset como workflow primário. Documentar decisão
+      no próximo sprint review.
+  - id: TEST-001
+    severity: low
+    finding: >
+      2 testes pré-existentes falhando em tests/integration/catalogs/start-extraction.test.ts
+      (Story 2.4 scope). Bug em extraction-actions.ts:49 — .single() quebra encadeamento .eq().
+    suggested_action: >
+      Criar issue para Story 2.4 fix. Não é escopo de Story 2.5.
+waiver:
+  active: false
+checks:
+  code_review: PASS
+  tests: PASS
+  acceptance_criteria: PASS
+  no_regressions: PASS
+  performance: PASS
+  security: PASS
+  documentation: CONCERNS
+test_summary:
+  unit: '71/71 passing'
+  integration_rls_products: '7/7 passing (P-PR-1..3, N-PR-1..4)'
+  integration_rls_brands: '10/10 passing'
+  integration_rls_uba: '7/7 passing'
+  pre_existing_failures: '2 (start-extraction.test.ts — Story 2.4 scope)'
+migration_validated:
+  supabase_db_reset: PASS
+  idempotent_indexes: true
+  idempotent_policy: true

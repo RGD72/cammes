@@ -13,6 +13,7 @@
 | `users_profile` | 3 | Sim |
 | `brands` | 2 | Sim |
 | `user_brand_access` | 3 | Sim |
+| `products` | 2 | Sim |
 
 ---
 
@@ -125,6 +126,36 @@
 | UPDATE cross-tenant por admin errado falha | N-BR-2 | `brands.test.ts` |
 | `uba_admin_manage` impede customer de inserir em `user_brand_access` | N-UBA-1 | `user-brand-access.test.ts` |
 | Acesso revogado é negado em `brands_customer_read_published` | N-BR-5 | `brands.test.ts` |
+
+---
+
+## Tabela: `products`
+
+### Políticas Implementadas
+
+| Nome | Operação | Condição SQL |
+|------|----------|-------------|
+| `products_admin_manage` | ALL | `EXISTS (SELECT 1 FROM public.brands WHERE brands.id = products.brand_id AND brands.owner_admin_id = auth.uid()) AND public.current_user_is_admin()` |
+| `products_customer_read` | SELECT | `status = 'approved' AND public.user_has_active_brand_access(brand_id) AND EXISTS (SELECT 1 FROM public.brands WHERE brands.id = products.brand_id AND brands.published = true)` |
+
+**Fonte:** `supabase/migrations/20260522000003_products_basic.sql`, `20260522000004_products_indexes_rls.sql`
+
+### Casos Positivos
+
+| # | Ator | Operação | Dado | Resultado Esperado |
+|---|------|----------|------|--------------------|
+| P-PR-1 | `admin_X` | SELECT | Produtos de `brand_X` (owned by admin_X) | Rows retornadas |
+| P-PR-2 | `customer_A` | SELECT | Produto `status='approved'` de marca `published=true` com `user_brand_access` ativo | Row retornada |
+| P-PR-3 | `admin_X` | UPDATE | Produto de `brand_X` (owned by admin_X) | UPDATE bem-sucedido |
+
+### Casos Negativos
+
+| # | Ator | Operação | Dado | Resultado Esperado |
+|---|------|----------|------|--------------------|
+| N-PR-1 | `admin_X` | SELECT | Produtos de `brand_Y` (owned by admin_Y) | 0 rows (cross-admin bloqueado) |
+| N-PR-2 | `customer_A` | SELECT | Produto `status='extracted'` (não aprovado) | 0 rows |
+| N-PR-3 | `customer_A` | SELECT | Produto de marca com `published=false` | 0 rows |
+| N-PR-4 | `customer_A` | SELECT | Produto de marca publicada sem `user_brand_access` | 0 rows |
 
 ---
 

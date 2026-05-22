@@ -31,7 +31,7 @@ LANGUAGE sql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
-  SELECT encode(public.pgp_sym_encrypt(p_plaintext, p_secret), 'base64');
+  SELECT encode(extensions.pgp_sym_encrypt(p_plaintext, p_secret), 'base64');
 $$;
 
 -- Helper: descriptografa via pgcrypto (recebe base64 TEXT, retorna texto)
@@ -41,5 +41,5 @@ LANGUAGE sql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
-  SELECT public.pgp_sym_decrypt(decode(p_ciphertext, 'base64'), p_secret);
+  SELECT extensions.pgp_sym_decrypt(decode(p_ciphertext, 'base64'), p_secret);
 $$;

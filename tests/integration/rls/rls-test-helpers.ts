@@ -98,6 +98,51 @@ export async function revokeAccess(customerId: string, brandId: string): Promise
   if (error) throw new Error(`Failed to revoke access: ${error.message}`)
 }
 
+export interface TestCatalog {
+  id: string
+}
+
+export async function createTestCatalog(brandId: string, uploadedBy: string): Promise<TestCatalog> {
+  const { data, error } = await supabaseAdmin
+    .from('catalogs')
+    .insert({
+      brand_id: brandId,
+      file_path: `test/catalog-${Date.now()}.pdf`,
+      page_count: 10,
+      status: 'pending',
+      uploaded_by: uploadedBy,
+    })
+    .select('id')
+    .single()
+  if (error || !data) throw new Error(`Failed to create catalog: ${error?.message}`)
+  return { id: data.id }
+}
+
+export interface TestExtractionJob {
+  id: string
+}
+
+export async function createTestExtractionJob(
+  catalogId: string,
+  brandId: string,
+  adminId: string,
+): Promise<TestExtractionJob> {
+  const { data, error } = await supabaseAdmin
+    .from('extraction_jobs')
+    .insert({
+      catalog_id: catalogId,
+      brand_id: brandId,
+      admin_user_id: adminId,
+      status: 'done',
+      model_id: 'test-model',
+      pages_total: 10,
+    })
+    .select('id')
+    .single()
+  if (error || !data) throw new Error(`Failed to create extraction job: ${error?.message}`)
+  return { id: data.id }
+}
+
 export async function cleanupTestData(userIds: string[]): Promise<void> {
   if (userIds.length === 0) return
   await supabaseAdmin.from('user_brand_access').delete().in('user_id', userIds)
