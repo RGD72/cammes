@@ -120,14 +120,12 @@ export function ExtractionProgressView({ initialJob, brandId, catalogId }: Props
         )}
 
         {job.status === 'done' && (
-          <button
-            type="button"
-            disabled
-            title="Funcionalidade disponível em breve"
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground opacity-50 cursor-not-allowed"
+          <Link
+            href={`/admin/brands/${brandId}/review`}
+            className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
-            Revisar produtos
-          </button>
+            Revisar produtos →
+          </Link>
         )}
 
         {job.status === 'failed' && (

@@ -61,6 +61,17 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
           </p>
         )}
 
+        {catalog?.status === 'ready_for_review' && (
+          <div className="mb-6">
+            <Link
+              href={`/admin/brands/${brand.id}/review`}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Revisar produtos →
+            </Link>
+          </div>
+        )}
+
         {(activeJobId || catalog?.status === 'processing') && (
           <div className="mb-6">
             <Link
