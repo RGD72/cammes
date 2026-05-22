@@ -1,0 +1,112 @@
+schema: 1
+story: '2.1'
+gate: PASS
+status_reason: >
+  Todos os 6 ACs implementados. 31/31 testes passando (14 novos + 17 regressão).
+  Segurança validada: pgcrypto via bind parameters, service role nunca exposto ao cliente,
+  chave retornada apenas mascarada, RLS com current_user_is_admin() sem risco de recursão.
+reviewer: Quinn
+updated: '2026-05-21T00:00:00Z'
+
+checks:
+  code_review: PASS
+  unit_tests: PASS
+  acceptance_criteria: PASS
+  no_regressions: PASS
+  performance: PASS
+  security: PASS
+  documentation: PASS
+
+metrics:
+  tests_total: 31
+  tests_passing: 31
+  tests_failing: 0
+  unit_tests_total: 31
+  unit_tests_passing: 31
+  lint_errors: 0
+  typecheck_errors: 0
+  acs_verified: 6
+  acs_total: 6
+
+acs_verified:
+  - ac: AC1
+    description: 'Tela /admin/settings/openrouter com input type=password, select de modelos (pré-selecionado google/gemini-flash-2.5), botão "Testar conexão" via useTransition com feedback visual de latência/erro'
+    status: PASS
+  - ac: AC2
+    description: 'Chave criptografada via pgp_sym_encrypt com OPENROUTER_KEY_ENCRYPTION_SECRET como bind parameter ($2) — nunca interpolada; armazenada como base64 TEXT em admin_settings.openrouter_key_encrypted'
+    status: PASS
+  - ac: AC3
+    description: 'getOpenRouterStatus retorna maskedKey = maskKey(plaintext) = "sk-or-...XXXX"; chave descriptografada internamente, nunca exposta via API'
+    status: PASS
+  - ac: AC4
+    description: 'getAdminOpenRouterKey retorna null sem lançar: quando row inexistente, quando openrouter_key_encrypted é null, e quando decryptKey falha — todos os cenários cobertos por unit tests'
+    status: PASS
+  - ac: AC5
+    description: 'getMonthlyCost query em extraction_jobs em try/catch retorna 0 graciosamente; display em USD e BRL com câmbio BRL_USD_RATE (default 5.80)'
+    status: PASS
+  - ac: AC6
+    description: 'logAuditEvent("openrouter_key_updated", {...}) chamado após upsert bem-sucedido; helper stub no-op com try/catch — nunca lança exceção'
+    status: PASS
+
+top_issues:
+  - id: TEST-001
+    severity: low
+    finding: >
+      Botão "Testar conexão" usa canTest = keyInput.length > 0, ignorando hasKey.
+      A spec (Task 4.1) diz que deve ser habilitado quando hasKey=true mesmo com campo vazio,
+      para permitir testar a chave já salva. Para implementar isso seria necessária uma Server
+      Action separada (testSavedOpenRouterKey) que lê, descriptografa e testa internamente.
+    suggested_action: >
+      Story futura ou task adicional: adicionar testSavedOpenRouterKey() Server Action e
+      atualizar lógica do botão para enabled when (keyInput.length > 0 OR hasKey).
+      Não bloqueia MVP — usuário pode re-inserir a chave e testar.
+
+  - id: UX-001
+    severity: low
+    finding: >
+      Botão "Salvar chave" habilitado quando keyInput="" e hasKey=true. Clicá-lo retorna
+      "Chave não pode ser vazia." — comportamento inesperado. Idealmente desabilitar
+      quando keyInput="" independente de hasKey.
+    suggested_action: >
+      Simplificar condição: disabled={isPending || keyInput.length === 0}.
+      A model é salva automaticamente via handleModelChange — o save button é exclusivo para chave.
+
+positive_findings:
+  - id: SEC-FIND-001
+    severity: info
+    finding: >
+      Implementação pgcrypto via DB functions SECURITY DEFINER com SET search_path = '' é
+      tecnicamente correta e segura. O segredo nunca aparece como texto literal no SQL —
+      sempre como bind parameter ($2) via supabase.rpc(). Nenhum risco de SQL injection
+      ou log poisoning da env var.
+
+  - id: SEC-FIND-002
+    severity: info
+    finding: >
+      Server Actions com 'use server' e uso correto de service role client apenas no servidor.
+      SUPABASE_SERVICE_ROLE_KEY não tem prefixo NEXT_PUBLIC_ e createServiceRoleSupabaseClient
+      está em lib/supabase/admin.ts (sem 'use client'). Boundary correto.
+
+  - id: ARCH-FIND-001
+    severity: info
+    finding: >
+      AdminNav extraído como Client Component separado (components/admin/admin-nav.tsx) para
+      suportar usePathname() mantendo app/admin/layout.tsx como Server Component.
+      Padrão correto para Next.js App Router.
+
+carry_forward_from_2.1:
+  - id: TEST-001
+    status: OPEN
+    note: 'Botão "Testar conexão" não permite testar chave já salva — adicionar testSavedOpenRouterKey() em story futura'
+  - id: UX-001
+    status: OPEN
+    note: 'Save button enabled com campo vazio quando hasKey=true — simplificar condição de disable'
+  # Carry forward from 1.6
+  - id: UX-001-1.6
+    status: OPEN
+    note: 'Validação de e-mail vazio no recover-password-form — não escopo desta story'
+  - id: SEC-003
+    status: OPEN
+    note: 'Parâmetro next no /auth/callback sem allowlist — não escopo desta story'
+
+waiver: { active: false }
