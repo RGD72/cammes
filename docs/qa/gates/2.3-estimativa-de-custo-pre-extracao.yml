@@ -1,0 +1,50 @@
+schema: 1
+story: '2.3'
+gate: CONCERNS
+status_reason: >
+  Todos os 7 ACs verificados e passando. 11 testes novos + 60 totais passando.
+  Três achados low severity documentados — nenhum bloqueia release MVP.
+reviewer: Quinn
+updated: '2026-05-22T10:30:00Z'
+top_issues:
+  - id: REQ-001
+    severity: low
+    finding: >
+      BRL_USD_RATE env var (sem prefixo NEXT_PUBLIC_) não é acessível no bundle
+      do cliente. ExtractionEstimateCard sempre usa a taxa padrão 5.80,
+      independente do valor configurado em Vercel. Operadores que alterem a env
+      var não verão efeito na estimativa exibida.
+    suggested_action: >
+      Documentar a limitação no cost-estimation-model.md (seção Limitações).
+      Para Story 2.4+, considerar passar a taxa como prop do Server Component
+      pai, ou expor como NEXT_PUBLIC_BRL_USD_RATE.
+
+  - id: UX-001
+    severity: low
+    finding: >
+      Durante o page count (que ocorre dentro do mesmo startTransition do
+      upload), o drop zone exibe "Fazendo upload..." enquanto a mensagem de
+      sucesso "Upload concluído com sucesso." já aparece abaixo — estado visual
+      contraditório por ~1-3 segundos.
+    suggested_action: >
+      Adicionar estado intermediário "counting" entre success e onUploadComplete,
+      ou mover setUploadState('success') para após countPdfPagesAndUpdateStatus
+      retornar.
+
+  - id: ACC-001
+    severity: low
+    finding: >
+      Modal de confirmação de custo não possui role="dialog", aria-modal="true",
+      aria-labelledby nem trap de foco. Tecla Escape não fecha o modal.
+    suggested_action: >
+      Adicionar atributos ARIA e handler de Escape no modal antes da Story 2.4,
+      quando o botão Iniciar Extração passará a ter ação real.
+
+waiver: { active: false }
+checks:
+  lint: PASS
+  typecheck: PASS
+  tests: PASS # 60/60 (11 novos em cost-estimate.test.ts)
+  ac_coverage: PASS # 7/7 ACs verificados
+  security: PASS
+  regression: PASS
