@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { CatalogUploadZone } from '@/components/admin/catalog-upload-zone'
 import { ExtractionEstimateCard } from '@/components/admin/extraction-estimate-card'
 import type { Brand } from '@/lib/brands/actions'
@@ -19,9 +20,10 @@ interface Props {
   catalog: Catalog | null
   hasOpenRouterKey: boolean
   modelId: string
+  activeJobId?: string
 }
 
-export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterKey, modelId }: Props) {
+export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterKey, modelId, activeJobId }: Props) {
   const [catalog, setCatalog] = useState<Catalog | null>(initialCatalog)
 
   return (
@@ -58,7 +60,18 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
           </p>
         )}
 
-        {catalog?.status === 'awaiting_extraction' && (
+        {(activeJobId || catalog?.status === 'processing') && (
+          <div className="mb-6">
+            <Link
+              href={`/admin/brands/${brand.id}/extraction/${activeJobId ?? ''}`}
+              className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Extração em andamento — Ver progresso →
+            </Link>
+          </div>
+        )}
+
+        {catalog?.status === 'awaiting_extraction' && !activeJobId && (
           <div className="mb-6">
             <ExtractionEstimateCard
               catalog={catalog}

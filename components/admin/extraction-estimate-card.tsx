@@ -1,11 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   calculateExtractionCost,
   exceedsThreshold,
   TOKENS_PER_IMAGE_ESTIMATE,
 } from '@/lib/catalogs/cost-estimate'
+import { startExtractionJob } from '@/lib/catalogs/extraction-actions'
 import type { Catalog } from '@/lib/catalogs/actions'
 
 interface Props {
@@ -15,8 +17,11 @@ interface Props {
   onExtractConfirmed?: () => void
 }
 
-export function ExtractionEstimateCard({ catalog, hasOpenRouterKey, modelId, onExtractConfirmed }: Props) {
+export function ExtractionEstimateCard({ catalog, hasOpenRouterKey, modelId }: Props) {
+  const router = useRouter()
   const [showModal, setShowModal] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const pages = catalog.page_count ?? 0
   const { estimatedCostUsd, estimatedCostBrl } = calculateExtractionCost(pages, modelId)
@@ -25,18 +30,34 @@ export function ExtractionEstimateCard({ catalog, hasOpenRouterKey, modelId, onE
   const brlFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
   const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 4 })
 
+  async function handleExtractConfirmed() {
+    setLoading(true)
+    setError(null)
+    const { jobId, error: err } = await startExtractionJob(
+      catalog.id,
+      catalog.brand_id,
+      catalog.page_count ?? 0,
+    )
+    if (err || !jobId) {
+      setError(err ?? 'Erro desconhecido.')
+      setLoading(false)
+      return
+    }
+    router.push(`/admin/brands/${catalog.brand_id}/extraction/${jobId}`)
+  }
+
   function handleExtractClick() {
-    if (!hasOpenRouterKey) return
+    if (!hasOpenRouterKey || loading) return
     if (needsConfirmation) {
       setShowModal(true)
     } else {
-      onExtractConfirmed?.()
+      handleExtractConfirmed()
     }
   }
 
   function handleConfirm() {
     setShowModal(false)
-    onExtractConfirmed?.()
+    handleExtractConfirmed()
   }
 
   return (
@@ -66,12 +87,16 @@ export function ExtractionEstimateCard({ catalog, hasOpenRouterKey, modelId, onE
         <button
           type="button"
           onClick={handleExtractClick}
-          disabled={!hasOpenRouterKey}
+          disabled={!hasOpenRouterKey || loading}
           title={!hasOpenRouterKey ? 'Configure sua chave OpenRouter primeiro' : undefined}
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Iniciar extração
+          {loading ? 'Iniciando...' : 'Iniciar extração'}
         </button>
+
+        {error && (
+          <p className="text-sm text-red-600">{error}</p>
+        )}
       </div>
 
       {showModal && (

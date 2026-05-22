@@ -1,0 +1,46 @@
+schema: 1
+story: '2.4'
+gate: PASS
+status_reason: >
+  Todos os 8 ACs implementados e verificados. Findings REL-001 (high), REL-002 (medium)
+  e MNT-001 (medium) do gate anterior corrigidos e confirmados. MNT-002 (low) aceito
+  como tech debt para migration futura. lint, typecheck e 71 testes passando.
+reviewer: Quinn
+updated: '2026-05-22T13:13:00Z'
+
+top_issues:
+  - id: MNT-002
+    severity: low
+    finding: >
+      `CREATE TYPE public.extraction_status` em `20260522000002_extraction_jobs.sql:1`
+      não usa guard `DO $$ BEGIN ... EXCEPTION WHEN duplicate_object` de idempotência.
+      Reexecução da migration após reset parcial falharia com "type already exists".
+    suggested_action: >
+      Tratar em migration de ajuste futura. Risco operacional baixo — migrations
+      são tipicamente aplicadas uma única vez por ambiente.
+
+quality_checks:
+  code_review: PASS
+  unit_tests: PASS        # 71/71 — 11 novos em extraction-schema
+  acceptance_criteria: PASS   # ACs 1-8 todos verificados
+  no_regressions: PASS    # 60 testes anteriores mantidos
+  performance: PASS       # REL-001 corrigido — encoding base64 em chunks de 8192 bytes
+  security: PASS          # OpenRouter key via header, RLS com security definer, cross-brand fix (MNT-001)
+  documentation: PASS     # extraction-prompt.md, story File List e Change Log completos
+
+fixes_verified:
+  - id: REL-001
+    status: FIXED
+    location: 'supabase/functions/extract-catalog/index.ts:121-126'
+    description: 'Encoding base64 reescrito em loop de chunks (8192 bytes) — elimina stack overflow'
+  - id: REL-002
+    status: FIXED
+    location: 'supabase/functions/extract-catalog/index.ts:118'
+    description: 'Null-check adicionado — lança erro descritivo se getContext retornar null'
+  - id: MNT-001
+    status: FIXED
+    location: 'lib/catalogs/extraction-actions.ts:49'
+    description: '.eq(brand_id, brandId) adicionado — catalogs cross-brand impedido'
+
+waiver:
+  active: false
