@@ -10,18 +10,25 @@ interface Props {
   params: Promise<{ id: string }>
 }
 
-async function getActiveJobId(catalogId: string, adminUserId: string): Promise<string | undefined> {
+async function getJobStatuses(
+  catalogId: string,
+  adminUserId: string,
+): Promise<{ activeJobId?: string; failedJobId?: string }> {
   const supabase = createServiceRoleSupabaseClient()
   const { data } = await supabase
     .from('extraction_jobs')
-    .select('id')
+    .select('id, status')
     .eq('catalog_id', catalogId)
     .eq('admin_user_id', adminUserId)
-    .in('status', ['queued', 'running'])
+    .neq('status', 'superseded')
     .order('created_at', { ascending: false })
     .limit(1)
     .single()
-  return data?.id ?? undefined
+
+  if (!data) return {}
+  if (data.status === 'queued' || data.status === 'running') return { activeJobId: data.id }
+  if (data.status === 'failed') return { failedJobId: data.id }
+  return {}
 }
 
 export default async function BrandDetailPage({ params }: Props) {
@@ -40,9 +47,9 @@ export default async function BrandDetailPage({ params }: Props) {
 
   if (!brand) notFound()
 
-  const activeJobId = catalog && user
-    ? await getActiveJobId(catalog.id, user.id)
-    : undefined
+  const { activeJobId, failedJobId } = catalog && user
+    ? await getJobStatuses(catalog.id, user.id)
+    : {}
 
   return (
     <BrandDetailView
@@ -51,6 +58,7 @@ export default async function BrandDetailPage({ params }: Props) {
       hasOpenRouterKey={openRouterStatus.hasKey}
       modelId={openRouterStatus.model}
       activeJobId={activeJobId}
+      failedJobId={failedJobId}
     />
   )
 }

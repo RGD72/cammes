@@ -1,13 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { retriggerExtraction } from '@/lib/catalogs/retrigger-actions'
 import type { ExtractionJob } from '@/app/admin/brands/[id]/extraction/[jobId]/page'
 
 interface Props {
   initialJob: ExtractionJob
   brandId: string
+  catalogId: string
 }
 
 const STATUS_LABELS: Record<ExtractionJob['status'], string> = {
@@ -15,6 +18,7 @@ const STATUS_LABELS: Record<ExtractionJob['status'], string> = {
   running: 'Processando',
   done: 'Concluído',
   failed: 'Falhou',
+  superseded: 'Substituído',
 }
 
 const STATUS_COLORS: Record<ExtractionJob['status'], string> = {
@@ -22,13 +26,29 @@ const STATUS_COLORS: Record<ExtractionJob['status'], string> = {
   running: 'bg-blue-100 text-blue-700',
   done: 'bg-green-100 text-green-700',
   failed: 'bg-red-100 text-red-700',
+  superseded: 'bg-gray-100 text-gray-500',
 }
 
 const brlFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 4 })
 
-export function ExtractionProgressView({ initialJob, brandId }: Props) {
+export function ExtractionProgressView({ initialJob, brandId, catalogId }: Props) {
   const [job, setJob] = useState<ExtractionJob>(initialJob)
+  const [retriggerError, setRetriggerError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
+
+  function handleRetrigger() {
+    setRetriggerError(null)
+    startTransition(async () => {
+      const result = await retriggerExtraction(catalogId, brandId)
+      if (result.error || !result.jobId) {
+        setRetriggerError(result.error ?? 'Erro desconhecido ao re-disparar extração.')
+      } else {
+        router.push(`/admin/brands/${brandId}/extraction/${result.jobId}`)
+      }
+    })
+  }
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient()
@@ -111,16 +131,30 @@ export function ExtractionProgressView({ initialJob, brandId }: Props) {
         )}
 
         {job.status === 'failed' && (
-          <div className="space-y-3">
+          <div className="space-y-3 rounded-md border border-red-200 bg-red-50 p-4">
+            <p className="text-sm font-medium text-red-700">A extração falhou após todas as tentativas.</p>
             {job.error_message && (
-              <p className="text-sm text-red-600 bg-red-50 rounded p-3">{job.error_message}</p>
+              <p className="text-xs text-red-600 font-mono bg-red-100 rounded p-2 break-all">{job.error_message}</p>
             )}
-            <Link
-              href={`/admin/brands/${brandId}`}
-              className="inline-block rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
-            >
-              ← Voltar para a marca
-            </Link>
+            {retriggerError && (
+              <p className="text-xs text-red-600">{retriggerError}</p>
+            )}
+            <div className="flex gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={handleRetrigger}
+                disabled={isPending}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isPending ? 'Iniciando...' : 'Tentar novamente'}
+              </button>
+              <Link
+                href={`/admin/brands/${brandId}`}
+                className="inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+              >
+                ← Voltar para a marca
+              </Link>
+            </div>
           </div>
         )}
       </div>

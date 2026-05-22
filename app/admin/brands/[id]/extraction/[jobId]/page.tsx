@@ -12,7 +12,7 @@ export interface ExtractionJob {
   catalog_id: string
   brand_id: string
   admin_user_id: string
-  status: 'queued' | 'running' | 'done' | 'failed'
+  status: 'queued' | 'running' | 'done' | 'failed' | 'superseded'
   model_id: string
   pages_total: number
   pages_processed: number
@@ -47,5 +47,5 @@ export default async function ExtractionProgressPage({ params }: Props) {
 
   if (!job) notFound()
 
-  return <ExtractionProgressView initialJob={job as ExtractionJob} brandId={brandId} />
+  return <ExtractionProgressView initialJob={job as ExtractionJob} brandId={brandId} catalogId={job.catalog_id} />
 }

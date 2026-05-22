@@ -21,9 +21,10 @@ interface Props {
   hasOpenRouterKey: boolean
   modelId: string
   activeJobId?: string
+  failedJobId?: string
 }
 
-export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterKey, modelId, activeJobId }: Props) {
+export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterKey, modelId, activeJobId, failedJobId }: Props) {
   const [catalog, setCatalog] = useState<Catalog | null>(initialCatalog)
 
   return (
@@ -67,6 +68,18 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
               className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
             >
               Extração em andamento — Ver progresso →
+            </Link>
+          </div>
+        )}
+
+        {failedJobId && (
+          <div className="mb-6 flex items-center gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3">
+            <span className="text-red-600 text-sm font-medium">⚠ A última extração falhou.</span>
+            <Link
+              href={`/admin/brands/${brand.id}/extraction/${failedJobId}`}
+              className="text-sm text-red-700 underline hover:text-red-900"
+            >
+              Ver detalhes e tentar novamente →
             </Link>
           </div>
         )}

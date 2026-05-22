@@ -178,7 +178,11 @@ async function processExtraction(payload: {
             look_group: p.look_group ?? null,
             source_page: pageIndex,
           }))
-          const { error: insertErr } = await supabase.from('products').insert(rows)
+          // Idempotent upsert: ON CONFLICT (extraction_job_id, source_page, reference) DO NOTHING
+          // Relies on idx_products_job_page_ref (partial, WHERE reference IS NOT NULL)
+          const { error: insertErr } = await supabase
+            .from('products')
+            .upsert(rows, { onConflict: 'extraction_job_id,source_page,reference', ignoreDuplicates: true })
           if (!insertErr) pageProducts = rows.length
         }
 
