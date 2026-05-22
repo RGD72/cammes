@@ -5,9 +5,9 @@ import {
   saveOpenRouterKey,
   saveOpenRouterModel,
   testOpenRouterKey,
-  OPENROUTER_VISION_MODELS,
   type OpenRouterStatus,
 } from '@/lib/admin/openrouter-settings'
+import { OPENROUTER_VISION_MODELS } from '@/lib/admin/openrouter-constants'
 
 interface Props {
   initialStatus: OpenRouterStatus

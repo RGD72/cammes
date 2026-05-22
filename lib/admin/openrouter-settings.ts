@@ -5,6 +5,7 @@ import { createServiceRoleSupabaseClient } from '@/lib/supabase/admin'
 import { encryptKey, decryptKey, maskKey } from '@/lib/openrouter/crypto'
 import { testOpenRouterConnection } from '@/lib/openrouter/test-connection'
 import { logAuditEvent } from '@/lib/audit/log-event'
+import { OPENROUTER_VISION_MODELS } from '@/lib/admin/openrouter-constants'
 
 export interface ActionResult {
   success: boolean
@@ -18,13 +19,6 @@ export interface OpenRouterStatus {
   monthlyCostUsd: number
   monthlyCostBrl: number
 }
-
-export const OPENROUTER_VISION_MODELS = [
-  { id: 'google/gemini-flash-2.5', label: 'Gemini Flash 2.5 (Padrão — mais rápido e econômico)' },
-  { id: 'google/gemini-pro-2.5', label: 'Gemini Pro 2.5 (maior precisão)' },
-  { id: 'openai/gpt-4o', label: 'GPT-4o (OpenAI)' },
-  { id: 'anthropic/claude-3-5-sonnet', label: 'Claude 3.5 Sonnet (Anthropic)' },
-] as const
 
 async function getCurrentAdminId(): Promise<string | null> {
   const supabase = await createServerSupabaseClient()
