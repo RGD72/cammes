@@ -7,7 +7,7 @@ export interface Catalog {
   brand_id: string
   file_path: string
   page_count: number | null
-  status: 'pending' | 'processing' | 'ready_for_review' | 'published'
+  status: 'pending' | 'awaiting_extraction' | 'processing' | 'ready_for_review' | 'published'
   uploaded_at: string
   uploaded_by: string
 }

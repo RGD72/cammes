@@ -4,6 +4,7 @@ import { useState, useRef, useTransition } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { getCatalogStoragePath } from '@/lib/supabase/storage'
 import { createCatalogRecord, checkUploadRateLimit, type Catalog } from '@/lib/catalogs/actions'
+import { countPdfPagesAndUpdateStatus } from '@/lib/catalogs/page-count'
 
 const MAX_SIZE_BYTES = 500 * 1024 * 1024 // 500 MB
 const ALLOWED_MIME = 'application/pdf'
@@ -131,9 +132,16 @@ export function CatalogUploadZone({ brandId, onUploadComplete }: Props) {
         setErrorMessage(recordError ?? 'Erro ao registrar catálogo.')
         return
       }
+
       setUploadState('success')
       setProgress(100)
-      onUploadComplete?.(catalog)
+
+      // Contar páginas e avançar status → awaiting_extraction
+      const { pageCount } = await countPdfPagesAndUpdateStatus(catalog.id, path)
+      const updatedCatalog: Catalog = pageCount !== null
+        ? { ...catalog, page_count: pageCount, status: 'awaiting_extraction' }
+        : catalog
+      onUploadComplete?.(updatedCatalog)
     })
   }
 

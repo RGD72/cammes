@@ -2,11 +2,13 @@
 
 import { useState } from 'react'
 import { CatalogUploadZone } from '@/components/admin/catalog-upload-zone'
+import { ExtractionEstimateCard } from '@/components/admin/extraction-estimate-card'
 import type { Brand } from '@/lib/brands/actions'
 import type { Catalog } from '@/lib/catalogs/actions'
 
 const STATUS_LABELS: Record<Catalog['status'], string> = {
   pending: 'Em processamento',
+  awaiting_extraction: 'Aguardando extração',
   processing: 'Em processamento',
   ready_for_review: 'Pronto para revisão',
   published: 'Publicado',
@@ -15,9 +17,11 @@ const STATUS_LABELS: Record<Catalog['status'], string> = {
 interface Props {
   brand: Brand
   catalog: Catalog | null
+  hasOpenRouterKey: boolean
+  modelId: string
 }
 
-export function BrandDetailView({ brand, catalog: initialCatalog }: Props) {
+export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterKey, modelId }: Props) {
   const [catalog, setCatalog] = useState<Catalog | null>(initialCatalog)
 
   return (
@@ -52,6 +56,16 @@ export function BrandDetailView({ brand, catalog: initialCatalog }: Props) {
           <p className="mb-3 text-xs text-foreground/40 font-mono truncate">
             {catalog.file_path}
           </p>
+        )}
+
+        {catalog?.status === 'awaiting_extraction' && (
+          <div className="mb-6">
+            <ExtractionEstimateCard
+              catalog={catalog}
+              hasOpenRouterKey={hasOpenRouterKey}
+              modelId={modelId}
+            />
+          </div>
         )}
 
         <CatalogUploadZone
