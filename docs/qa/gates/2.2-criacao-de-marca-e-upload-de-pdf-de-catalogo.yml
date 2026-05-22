@@ -1,0 +1,164 @@
+schema: 1
+story: '2.2'
+gate: CONCERNS
+status_reason: >
+  5 de 6 ACs totalmente verificados. 18 novos testes + 49/49 totais passando. Lint e typecheck
+  sem erros. AC3 é o único desvio material: a story especifica protocolo TUS resumível
+  (byte-level resume), mas a implementação usa XMLHttpRequest standard — limitação
+  documentada de @supabase/storage-js v2.106.0 (sem onUploadProgress). A barra de progresso
+  funciona. O upload completa corretamente. O débito técnico TECH-DEBT-2.2-TUS está
+  registrado nas Dev Notes. Todos os demais requisitos funcionais e de segurança atendem.
+  Aprovado para push com concerns documentados.
+reviewer: Quinn
+updated: '2026-05-22T00:00:00Z'
+
+checks:
+  code_review: CONCERNS
+  unit_tests: PASS
+  acceptance_criteria: CONCERNS
+  no_regressions: PASS
+  performance: PASS
+  security: CONCERNS
+  documentation: PASS
+
+metrics:
+  tests_total: 49
+  tests_passing: 49
+  tests_failing: 0
+  unit_tests_new: 18
+  unit_tests_total: 49
+  unit_tests_passing: 49
+  lint_errors: 0
+  typecheck_errors: 0
+  acs_verified: 5
+  acs_total: 6
+
+acs_verified:
+  - ac: AC1
+    description: 'Tela /admin/brands/new com campos nome (obrigatório), slug (auto-gerado + editável), descrição e logo_url (opcionais). Client-side validation + redirect para /admin/brands/{id} em sucesso.'
+    status: PASS
+
+  - ac: AC2
+    description: 'Detalhe da marca em /admin/brands/{id} com zona drag-drop CatalogUploadZone e status do catálogo: null→"Nenhum catálogo", pending/processing→"Em processamento", ready_for_review→"Pronto para revisão", published→"Publicado".'
+    status: PASS
+
+  - ac: AC3
+    description: >
+      Upload cliente→Supabase Storage com barra de progresso. DESVIO: implementação usa
+      XHR (xhr.upload.onprogress) em vez do protocolo TUS resumível. @supabase/storage-js
+      v2.106.0 não expõe onUploadProgress em FileOptions. Progresso funciona. Resumibilidade
+      byte-level em queda de rede NÃO implementada — registrado como TECH-DEBT-2.2-TUS.
+    status: CONCERNS
+
+  - ac: AC4
+    description: 'Validação cliente (extensão .pdf, MIME application/pdf, tamanho ≤500MB) em catalog-upload-zone.tsx. Validação servidor via bucket config: file_size_limit=524288000, allowed_mime_types=ARRAY[application/pdf].'
+    status: PASS
+
+  - ac: AC5
+    description: 'createCatalogRecord() insere em catalogs (id, brand_id, file_path, page_count=null, status=pending, uploaded_at, uploaded_by=auth.uid()) após upload bem-sucedido. getCatalogByBrand retorna catálogo mais recente.'
+    status: PASS
+
+  - ac: AC6
+    description: 'checkUploadRateLimit() conta uploads em catalogs WHERE uploaded_by=user.id AND uploaded_at>now()-1h. Verifica ANTES do upload. Retorna {allowed, count, limit:3}. Fallback gracioso em erro de DB (allowed:true).'
+    status: PASS
+
+top_issues:
+  - id: REQ-001
+    severity: medium
+    category: requirements
+    finding: >
+      AC3 especifica "protocolo TUS resumível" com retomada do último byte confirmado
+      em caso de queda de rede. A implementação usa XMLHttpRequest padrão (HTTP POST),
+      que não implementa o protocolo TUS. Em caso de queda de conexão, o upload
+      reinicia do zero. @supabase/storage-js v2.106.0 não expõe onUploadProgress —
+      XHR é a solução funcional mais direta disponível.
+    recommendation: >
+      Criar story futura para substituir XHR por tus-js-client com endpoint
+      /storage/v1/upload/resumable do Supabase. Registrar como TECH-DEBT-2.2-TUS.
+      Não bloqueia MVP: upload funcional com progresso, limitação documentada.
+
+  - id: SEC-001
+    severity: low
+    category: security
+    finding: >
+      Campo logo_url aceita qualquer URL e é renderizado como <img src={brand.logo_url}> em
+      brand-detail-view.tsx sem validação de domínio. Permite que admins carreguem imagens
+      de origens arbitrárias (sem XSS, mas abre para rastreamento externo via pixel de imagem
+      ou carregamento de conteúdo de domínios não confiáveis).
+    recommendation: >
+      Validar logo_url contra allowlist de domínios em createBrand() (server-side),
+      ou usar next/image com domains configurados no next.config.ts para limitar origens.
+      Aceitável para MVP com admins internos confiáveis.
+
+  - id: UX-001
+    severity: low
+    category: code
+    finding: >
+      handleSlugChange em brand-create-form.tsx silencia silenciosamente entradas com
+      caracteres inválidos (apenas passa a condição SLUG_PATTERN.test(value)). O usuário
+      que tenta digitar um caractere inválido não recebe feedback — o campo simplesmente
+      não atualiza. Pode causar confusão.
+    recommendation: >
+      Adicionar estado slugError local exibindo "Apenas letras minúsculas, números e hífens."
+      quando SLUG_PATTERN não passa em handleSlugChange, ou aceitar a entrada e marcar o
+      campo como inválido com mensagem de erro inline.
+
+positive_findings:
+  - id: ARCH-FIND-001
+    severity: info
+    finding: >
+      Separação Server Component / Client Component correta em todas as rotas:
+      page.tsx fetches data no servidor; form/view components são Client Components.
+      Promise.all em /admin/brands/[id]/page.tsx para fetch paralelo de brand + catalog.
+      Padrão correto para Next.js 15 App Router.
+
+  - id: SEC-FIND-001
+    severity: info
+    finding: >
+      Upload usa createSupabaseBrowserClient() (session token do usuário), não service role.
+      getCatalogStoragePath() construído no servidor sem input do usuário no path.
+      uploaded_by sempre setado como auth.uid() no servidor, nunca recebido do cliente.
+
+  - id: SEC-FIND-002
+    severity: info
+    finding: >
+      Bucket catalogs configurado como privado (public: false) com file_size_limit e
+      allowed_mime_types no nível do Supabase Storage — validação server-side sem depender
+      de lógica de aplicação. Storage Policies usam (storage.foldername(name))[1] para
+      verificar brand ownership via JOIN em brands. Abordagem robusta.
+
+  - id: TEST-FIND-001
+    severity: info
+    finding: >
+      18 novos testes unitários cobrindo as três funções de maior risco: generateSlug
+      (7 casos com acentos, espaços, hífens), checkUploadRateLimit (5 casos incluindo
+      fallback em DB error), createBrand (6 casos incluindo auth, 23505, slug inválido).
+      Mocks corretos com vi.hoisted e vi.stubEnv. Nenhum teste frágil detectado.
+
+carry_forward:
+  # De 2.1
+  - id: TEST-001
+    status: OPEN
+    note: 'Botão "Testar conexão" não permite testar chave já salva — story futura'
+  - id: UX-001-2.1
+    status: OPEN
+    note: 'Save button habilitado com campo vazio quando hasKey=true — simplificar condição'
+  # De 1.6
+  - id: UX-001-1.6
+    status: OPEN
+    note: 'Validação de e-mail vazio no recover-password-form'
+  - id: SEC-003
+    status: OPEN
+    note: 'Parâmetro next no /auth/callback sem allowlist'
+  # Novos de 2.2
+  - id: REQ-001
+    status: OPEN
+    note: 'TECH-DEBT-2.2-TUS: substituir XHR por tus-js-client para upload resumível verdadeiro'
+  - id: SEC-001
+    status: OPEN
+    note: 'logo_url sem validação de domínio — next/image domains ou server-side allowlist'
+  - id: UX-001
+    status: OPEN
+    note: 'handleSlugChange silencia chars inválidos sem feedback visual'
+
+waiver: { active: false }
