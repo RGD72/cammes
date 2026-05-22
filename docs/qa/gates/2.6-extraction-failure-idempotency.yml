@@ -1,0 +1,65 @@
+schema: 1
+story: '2.6'
+gate: CONCERNS
+status_reason: >
+  Todos os 6 ACs verificados e quality gates passando (77/77 testes, 0 lint errors, 0 typecheck errors).
+  Uma observação de cobertura de teste de baixa severidade documentada — não bloqueia entrega.
+reviewer: Quinn
+updated: '2026-05-22T18:58:00Z'
+
+quality_gates:
+  lint: PASS       # 0 ESLint warnings or errors
+  typecheck: PASS  # tsc --noEmit: 0 errors
+  tests: PASS      # 77/77 unit tests passing (6 novos retrigger tests)
+
+acceptance_criteria:
+  AC1: PASS   # Migration superseded + retriggerExtraction com auth, ownership, supersede, delete, create, dispatch
+  AC2: PASS   # Edge Function com upsert ON CONFLICT DO NOTHING + partial unique index
+  AC3: PASS   # Banner de falha com error_message + botão "Tentar novamente" + badge na tela da marca
+  AC4: PASS   # extraction-failure-modes.md com 4 cenários documentados
+  AC5: PASS   # 6 testes unitários (4 obrigatórios + 2 extras: N-RT-2, N-RT-3)
+  AC6: PASS   # Migration aplicada sem erros via supabase db reset
+
+top_issues:
+  - id: TEST-001
+    severity: low
+    finding: >
+      P-RT-3 ("cria novo job com status queued") não verifica explicitamente
+      que o payload do INSERT inclui ou omite o campo status. O comportamento
+      correto é garantido pelo DEFAULT 'queued' na migration (confirmado em
+      20260522000002_extraction_jobs.sql:8), mas o teste não cobre esta
+      invariante explicitamente.
+    suggested_action: >
+      Em sprint futuro, adicionar assertion no mock do INSERT verificando
+      que o chamador não passa status incorreto — por exemplo,
+      asserting que o insert não inclui status='running' ou 'failed'.
+      Baixa prioridade: DB default é o mecanismo correto aqui.
+
+  - id: REL-001
+    severity: low
+    finding: >
+      Se o dispatch da Edge Function falha (rede indisponível), o fluxo de
+      retrigger realiza rollback correto (deleta novo job, reverte catalog
+      para awaiting_extraction), mas o job anterior permanece 'superseded'.
+      O admin não pode usar "Tentar novamente" novamente — deve usar o botão
+      "Iniciar extração" na tela da marca (ExtractionEstimateCard). A UX
+      de erro retornado ('Não foi possível iniciar a re-extração.') não
+      comunica isso ao admin.
+    suggested_action: >
+      Considerar melhorar a mensagem de erro neste cenário para orientar o
+      admin a voltar para a tela da marca e usar "Iniciar extração".
+      Alternativa: desfazer o supersede do job anterior no rollback.
+      Escopo Story 2.7 ou QA backlog.
+
+waiver: { active: false }
+
+code_intel_advisory: not_available
+coderabbit: disabled  # coderabbit_integration not configured in core-config.yaml
+
+notes: >
+  Falhas pré-existentes em tests/unit/catalogs/start-extraction.test.ts
+  (TEST-001 escopo Story 2.4 — 2 falhas no .single() chain) são pré-existentes
+  e não são regressão desta story. Excluídas do npm test count: 77/77 = apenas
+  testes unitários (start-extraction.test.ts não está no escopo de 77).
+  RLS integration tests (24/24) não foram re-executados nesta sessão mas
+  passaram na sessão de desenvolvimento.
