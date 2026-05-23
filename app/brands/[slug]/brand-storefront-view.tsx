@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useTransition } from 'react'
 import { ProductGridCard } from '@/components/brands/product-grid-card'
+import { SelectProductModal } from '@/components/brands/select-product-modal'
 import { getCatalogSignedUrl } from '@/lib/catalogs/actions'
 import type { Brand } from '@/lib/brands/actions'
 import type { Product } from '@/lib/products/actions'
@@ -18,6 +19,7 @@ export function BrandStorefrontView({ brand, products, catalogId }: Props) {
   const [selectedLooks, setSelectedLooks] = useState<string[]>([])
   const [selectedSizes, setSelectedSizes] = useState<string[]>([])
   const [isPdfPending, startPdfTransition] = useTransition()
+  const [modalProduct, setModalProduct] = useState<Product | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300)
@@ -183,9 +185,21 @@ export function BrandStorefrontView({ brand, products, catalogId }: Props) {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filteredProducts.map((product) => (
-            <ProductGridCard key={product.id} product={product} />
+            <ProductGridCard
+              key={product.id}
+              product={product}
+              onSelect={setModalProduct}
+            />
           ))}
         </div>
+      )}
+
+      {modalProduct && (
+        <SelectProductModal
+          product={modalProduct}
+          brandId={brand.id}
+          onClose={() => setModalProduct(null)}
+        />
       )}
     </div>
   )

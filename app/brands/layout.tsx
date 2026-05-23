@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { LogoutButton } from '@/components/ui/logout-button'
+import { Toaster } from 'sonner'
 
 export default async function BrandsLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createServerSupabaseClient()
@@ -25,6 +26,7 @@ export default async function BrandsLayout({ children }: { children: React.React
         </div>
       </header>
       <main>{children}</main>
+      <Toaster richColors position="top-center" />
     </div>
   )
 }

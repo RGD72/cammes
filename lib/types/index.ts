@@ -1,3 +1,23 @@
+export type ApiErrorCode =
+  | 'VALIDATION_ERROR'
+  | 'PERMISSION_DENIED'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
+  | 'RATE_LIMITED'
+  | 'EXTERNAL_API_ERROR'
+  | 'BUDGET_CONFIRMATION_REQUIRED'
+  | 'INTERNAL'
+
+export interface ApiError {
+  code: ApiErrorCode
+  message: string
+  details?: Record<string, unknown>
+  timestamp: string
+  requestId: string
+}
+
+export type Result<T> = { ok: true; data: T } | { ok: false; error: ApiError }
+
 export type UserRole = 'admin' | 'customer'
 
 export interface UserProfile {

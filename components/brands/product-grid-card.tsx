@@ -14,8 +14,7 @@ export function ProductGridCard({ product, onSelect }: Props) {
   return (
     <article
       tabIndex={0}
-      className="rounded-lg border bg-card overflow-hidden flex flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={() => onSelect?.(product)}
+      className="group rounded-lg border bg-card overflow-hidden flex flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') onSelect?.(product)
       }}
@@ -65,6 +64,15 @@ export function ProductGridCard({ product, onSelect }: Props) {
         )}
         {product.price_brl != null && (
           <p className="text-sm font-semibold mt-auto">{priceFormatter.format(product.price_brl)}</p>
+        )}
+        {onSelect && (
+          <button
+            type="button"
+            onClick={() => onSelect(product)}
+            className="mt-2 w-full rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            ESCOLHER
+          </button>
         )}
       </div>
     </article>
