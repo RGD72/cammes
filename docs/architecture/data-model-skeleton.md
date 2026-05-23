@@ -162,6 +162,18 @@ users_profile ──────────────────────
                    (user_id, brand_id,                 (id, brand_id, catalog_id,
                     granted_at, granted_by,              reference, status,
                     revoked_at)                          display_order, ...)
+     │
+     │ 1:N via (user_id, brand_id) UNIQUE
+     └──────────── carts
+                   (id, user_id, brand_id,
+                    customer_name, ...)
+                        │
+                        │ 1:N (cart_id)
+                        └──── cart_items
+                              (id, cart_id, product_id,
+                               color, size, quantity,
+                               unit_price_brl_snapshot,
+                               total_brl, ...)
 ```
 
 ---
@@ -181,10 +193,68 @@ users_profile ──────────────────────
 | `supabase/migrations/20260522000002_extraction_jobs.sql` | Tabela `extraction_jobs`, índices, RLS |
 | `supabase/migrations/20260522000003_products_basic.sql` | Enum `product_status`, tabela `products`, 2 índices, 2 RLS policies, trigger |
 | `supabase/migrations/20260522000004_products_indexes_rls.sql` | Índices `look_group` e `display_order`; refinamento `products_customer_read` (Story 2.5) |
+| `supabase/migrations/20260522000005_extraction_superseded_status.sql` | Status `superseded` em extraction_jobs (Story 3.2) |
+| `supabase/migrations/20260523000001_carts.sql` | Tabelas `carts` e `cart_items`, índice `idx_cart_items_cart`, 2 RLS policies (Story 4.2) |
+
+---
+
+## carts
+
+Carrinho server-side por cliente por marca. UNIQUE (user_id, brand_id) garante um carrinho por par.
+
+| Coluna | Tipo | Nullable | Default | Descrição |
+|--------|------|----------|---------|-----------|
+| id | UUID | NO | gen_random_uuid() | PK |
+| user_id | UUID | NO | — | FK → users_profile(id) ON DELETE CASCADE |
+| brand_id | UUID | NO | — | FK → brands(id) ON DELETE CASCADE |
+| customer_name | TEXT | NO | — | Pré-preenchido com full_name do perfil; editável em Story 4.3 |
+| created_at | TIMESTAMPTZ | NO | now() | — |
+| updated_at | TIMESTAMPTZ | NO | now() | — |
+
+**Constraint UNIQUE:** `(user_id, brand_id)`
+
+**RLS Policies:**
+| Policy | Operação | Condição |
+|--------|----------|----------|
+| carts_owner | ALL | `user_id = auth.uid()` |
+
+**Relacionamentos:**
+- N:1 com `users_profile` (user_id)
+- N:1 com `brands` (brand_id)
+- 1:N com `cart_items` (cart_id)
+
+---
+
+## cart_items
+
+Itens de linha de um carrinho. Snapshot de preço capturado no momento da adição.
+
+| Coluna | Tipo | Nullable | Default | Descrição |
+|--------|------|----------|---------|-----------|
+| id | UUID | NO | gen_random_uuid() | PK |
+| cart_id | UUID | NO | — | FK → carts(id) ON DELETE CASCADE |
+| product_id | UUID | NO | — | FK → products(id) ON DELETE RESTRICT |
+| color | TEXT | YES | NULL | Cor selecionada |
+| size | TEXT | YES | NULL | Tamanho selecionado |
+| quantity | INTEGER | NO | — | CHECK (quantity >= 1 AND quantity <= 99) |
+| unit_price_brl_snapshot | NUMERIC(10,2) | NO | — | Preço unitário no momento da adição |
+| total_brl | NUMERIC(12,2) | NO | — | quantity * unit_price_brl_snapshot |
+| added_at | TIMESTAMPTZ | NO | now() | — |
+
+**Índices:** `idx_cart_items_cart ON cart_items(cart_id)`
+
+**RLS Policies:**
+| Policy | Operação | Condição |
+|--------|----------|----------|
+| cart_items_owner | ALL | `EXISTS (SELECT 1 FROM carts c WHERE c.id = cart_items.cart_id AND c.user_id = auth.uid())` |
+
+**Relacionamentos:**
+- N:1 com `carts` (cart_id)
+- N:1 com `products` (product_id)
 
 ---
 
 ## Tabelas de Epics Futuros (não incluídas nesta story)
 
-> As tabelas abaixo pertencem aos Epics 3-5 e serão criadas em stories futuras:
-> `carts`, `orders`, `audit_logs`, `consent_log`, `deletion_requests`
+> As tabelas abaixo pertencem aos Epics 4-5 e serão criadas em stories futuras:
+> `orders`, `order_items`, `audit_logs`, `consent_log`, `deletion_requests`
