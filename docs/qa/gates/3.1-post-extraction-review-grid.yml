@@ -1,0 +1,62 @@
+schema: 1
+story: '3.1'
+gate: PASS
+status_reason: >
+  Todos os 9 ACs verificados e quality gates passando (81/81 testes, 0 lint errors, 0 typecheck errors).
+  Três observações de baixa severidade documentadas — nenhuma bloqueia entrega.
+reviewer: Quinn
+updated: '2026-05-22T21:42:00Z'
+
+quality_gates:
+  lint: PASS       # 0 ESLint warnings or errors
+  typecheck: PASS  # tsc --noEmit: 0 errors
+  tests: PASS      # 81/81 unit tests passing (4 novos product-actions tests)
+
+acceptance_criteria:
+  AC1: PASS   # Rota /review com grid responsivo + redirect guard + link em brand-detail-view
+  AC2: PASS   # Card completo: fallback SVG, chips sizes/colors, badge confiança, badge omitido se null
+  AC3: PASS   # Edição inline: Enter/blur confirma, Escape reverte, optimistic update, revert em erro, toast
+  AC4: PASS   # Filtros: busca debounced 300ms, LOOK, status, sort por confiança ASC (null last)
+  AC5: PASS   # Bulk approve/hide + Reprocessar catálogo → retriggerExtraction + redirect
+  AC6: PASS   # Progresso "X aprovados / Y total" + mensagem de revisão completa + link placeholder
+  AC7: PASS   # updateProduct: auth + ownership check + RLS + retorna {product, error}
+  AC8: PASS   # bulkUpdateProductStatus: pré-SELECT ownership + batch UPDATE + retorna {updated, error}
+  AC9: PASS   # 4 testes unitários passando: P-UP-1, N-UP-1, P-BU-1, N-BU-1
+
+top_issues:
+  - id: TEST-001
+    severity: low
+    finding: >
+      getProductsForReview não possui testes unitários. A função executa uma query simples
+      (select + order) e o comportamento correto é garantido pelo schema RLS da Story 2.5,
+      mas ausência de cobertura é nota válida para sprints futuros.
+    suggested_action: >
+      Adicionar teste P-GR-1 verificando que apenas produtos da marca são retornados
+      e que a ordenação por extraction_confidence ASC está correta (null last).
+      Baixa prioridade — AC9 não exige este teste.
+
+  - id: MNT-001
+    severity: low
+    finding: >
+      Link "Ir para publicação" aponta para /admin/brands/${brandId} (tela da marca)
+      em vez de uma rota de publicação dedicada (/admin/brands/${brandId}/publish).
+      O AC6 aceita placeholder para esta story.
+    suggested_action: >
+      Atualizar para /admin/brands/${brandId}/publish quando Story 3.3
+      (Estado Publicado / Não Publicado) for implementada.
+
+  - id: ARCH-001
+    severity: low
+    finding: >
+      Todos os produtos da marca são carregados no SSR e filtrados 100% client-side.
+      Para catálogos típicos (50-200 produtos) o impacto é mínimo. Para volumes
+      maiores (>500 produtos), o tempo de carregamento inicial e o payload SSR
+      podem crescer.
+    suggested_action: >
+      Se catálogos com >500 produtos tornarem-se comuns, considerar paginação
+      server-side ou cursor-based loading em sprint futuro. Não bloqueia MVP.
+
+waiver: { active: false }
+
+code_intel_advisory: not_available
+coderabbit: disabled  # coderabbit_integration not configured in core-config.yaml
