@@ -1,0 +1,93 @@
+schema: 1
+story: '4.2'
+gate: PASS
+status_reason: >
+  Todos os 7 ACs verificados. Migration aplicada, RLS correta, 5 Server Actions
+  implementadas com auth guard, price snapshot e isolamento por marca. 109 testes
+  passando, lint e typecheck limpos.
+reviewer: Quinn
+updated: '2026-05-23T18:20:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: >
+      Ausência de testes para caminhos de erro pós-happy-path: ex. getCart quando
+      a query de items falha, clearCart quando o DELETE falha, updateQuantity
+      quando o UPDATE falha após o fetch bem-sucedido.
+    suggested_action: >
+      Adicionar casos negativos para erros de DB em Story 4.3 ou backlog dedicado
+      de testes; não bloqueia MVP.
+  - id: 'TEST-002'
+    severity: low
+    finding: >
+      Sem teste de VALIDATION_ERROR em updateQuantity (ex. quantity: 0);
+      apenas addItem tem cobertura de validação Zod.
+    suggested_action: >
+      Adicionar N-UQ-2 cobrindo quantity inválida em uma revisão futura.
+  - id: 'MNT-001'
+    severity: low
+    finding: >
+      removeItem usa `count === 0` para NOT_FOUND; Supabase tipifica count como
+      number | null com count: 'exact'. Em caso extremamente improvável de count
+      null sem error, NOT_FOUND não seria retornado.
+    suggested_action: >
+      Considerar guard `if (!count || count === 0)` em hardening futuro; sem
+      impacto prático no MVP pois count = null só ocorre sem a opção exact.
+waiver:
+  active: false
+
+# --- Detalhamento da Revisão ---
+
+checks:
+  code_review:
+    verdict: PASS
+    notes: >
+      Helpers DRY (permissionDenied, notFound, internalError) eliminam repetição.
+      Auth guard consistente em todas as 5 actions. Pattern get-or-create para cart
+      preserva customer_name corretamente (SF-2). clearCart idempotente (SF-1).
+      Price snapshot lido do DB — sem risco de injeção de preço pelo cliente.
+
+  unit_tests:
+    verdict: PASS
+    notes: >
+      109 testes passando. 15 novos casos em 2 arquivos: happy paths (P-AI-1,
+      P-GC-1, P-UQ-1, P-RI-1, P-CC-1), auth failures (5x PERMISSION_DENIED),
+      NOT_FOUND (N-GC-1, N-UQ-1, N-RI-1), VALIDATION_ERROR (N-AI-2),
+      brand access denied (N-AI-3), idempotency (N-CC-1).
+
+  acceptance_criteria:
+    verdict: PASS
+    notes: >
+      AC1 (carts UNIQUE): migration OK. AC2 (cart_items): migration OK.
+      AC3 (RLS + brand access): políticas SQL + RPC user_has_active_brand_access.
+      AC4 (5 Server Actions): addItem, getCart, updateQuantity, removeItem,
+      clearCart implementadas. AC5 (price snapshot): SELECT price_brl antes do
+      INSERT. AC6 (NFR <500ms, índice): idx_cart_items_cart criado.
+      AC7 (testes): todos os casos exigidos presentes e passando.
+
+  no_regressions:
+    verdict: PASS
+    notes: >
+      98 testes pré-existentes mantidos. Sem alterações em arquivos fora do
+      escopo da story.
+
+  performance:
+    verdict: PASS
+    notes: >
+      Índice idx_cart_items_cart garante leitura eficiente por cart_id.
+      Sem N+1 queries. getCart faz 2 SELECTs sequenciais — aceitável para MVP.
+      Operações de mutação single-trip (1-2 queries).
+
+  security:
+    verdict: PASS
+    notes: >
+      Auth guard em toda action. RLS enforces ownership no DB. Preço lido do DB
+      (AC5 — sem price injection). user_has_active_brand_access via SECURITY
+      DEFINER (sem recursão RLS). Zod valida inputs. createServerSupabaseClient
+      respeita RLS (não usa service role key).
+
+  documentation:
+    verdict: PASS
+    notes: >
+      data-model-skeleton.md atualizado: seções carts e cart_items, diagrama
+      ASCII, tabela de migrações. Story 4.2 com File List completo.
