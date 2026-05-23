@@ -64,6 +64,33 @@ export async function getCatalogByBrand(brandId: string): Promise<Catalog | null
   return data as Catalog
 }
 
+export async function getCatalogSignedUrl(
+  catalogId: string,
+): Promise<{ url: string | null; error: string | null }> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return { url: null, error: 'Usuário não autenticado.' }
+
+  const { data: catalog, error: catError } = await supabase
+    .from('catalogs')
+    .select('file_path')
+    .eq('id', catalogId)
+    .single()
+
+  if (catError || !catalog) return { url: null, error: 'Catálogo não encontrado.' }
+
+  const { data: signedData, error: signError } = await supabase.storage
+    .from('catalogs')
+    .createSignedUrl(catalog.file_path, 300)
+
+  if (signError || !signedData) return { url: null, error: 'Erro ao gerar link de download.' }
+
+  return { url: signedData.signedUrl, error: null }
+}
+
 export async function checkUploadRateLimit(): Promise<RateLimitResult> {
   const supabase = await createServerSupabaseClient()
   const {

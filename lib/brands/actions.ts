@@ -93,6 +93,18 @@ export async function listAdminBrands(): Promise<Brand[]> {
   return data as Brand[]
 }
 
+export async function getBrandBySlug(slug: string): Promise<Brand | null> {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('brands')
+    .select('*')
+    .eq('slug', slug)
+    .single()
+
+  if (error || !data) return null
+  return data as Brand
+}
+
 export async function toggleBrandPublished(
   brandId: string,
   published: boolean,

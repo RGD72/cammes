@@ -40,6 +40,20 @@ export async function getProductsForReview(brandId: string): Promise<Product[]> 
   return (data ?? []) as Product[]
 }
 
+export async function getApprovedProductsForStorefront(brandId: string): Promise<Product[]> {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('brand_id', brandId)
+    .eq('status', 'approved')
+    .order('display_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
+
+  if (error) return []
+  return (data ?? []) as Product[]
+}
+
 export async function updateProduct(
   productId: string,
   brandId: string,
