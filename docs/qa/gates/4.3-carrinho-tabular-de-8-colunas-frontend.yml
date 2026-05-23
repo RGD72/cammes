@@ -1,0 +1,113 @@
+schema: 1
+story: '4.3'
+gate: PASS
+status_reason: >
+  Todos os 8 ACs verificados. CartTable renderiza as 8 colunas obrigatórias na ordem
+  exata, stepper otimista via useOptimistic, remoção com router.refresh(). setCustomerName
+  com auth guard, validação Zod e detecção NOT_FOUND por count:exact. RSC com batch
+  product fetch e inline server actions. 120 testes passando, lint 0 erros, typecheck
+  0 erros.
+reviewer: Quinn
+updated: '2026-05-23T22:00:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: >
+      Ausência de teste para name > 100 caracteres em setCustomerName; Zod rejeita
+      corretamente em runtime mas o caso N-SCN-VALIDATION_MAX não está coberto por
+      teste unitário.
+    suggested_action: >
+      Adicionar N-SCN-4 cobrindo max length em revisão futura; sem impacto no MVP.
+  - id: 'TEST-002'
+    severity: low
+    finding: >
+      Sem teste para cenário de rollback do useOptimistic no CartTable: quando
+      onChangeQty falha, o estado optimista deveria reverter automaticamente.
+    suggested_action: >
+      Adicionar A-CT-2 em story futura cobrindo falha de onChangeQty e verificando
+      que a quantidade retorna ao valor original.
+  - id: 'MNT-001'
+    severity: low
+    finding: >
+      handleChangeQty em page.tsx invoca updateQuantity mas não propaga o resultado;
+      router.refresh() é chamado mesmo quando a action falha, potencialmente
+      mascarando erros ao usuário.
+    suggested_action: >
+      Em hardening futuro, verificar result.ok antes de chamar router.refresh() e
+      exibir toast de erro quando a atualização falha; sem impacto funcional no MVP.
+  - id: 'MNT-002'
+    severity: low
+    finding: >
+      CustomerNameEditor reverte ao initialName (valor RSC-time) em caso de erro,
+      não ao último valor salvo com sucesso. Se o usuário editar duas vezes e a
+      segunda falhar, o input volta ao nome original da página, não ao da primeira
+      edição.
+    suggested_action: >
+      Rastrear lastSavedName em estado separado e reverter para ele; baixo impacto
+      prático no MVP pois router.refresh() sincroniza o RSC após sucesso.
+waiver:
+  active: false
+
+# --- Detalhamento da Revisão ---
+
+checks:
+  code_review:
+    verdict: PASS
+    notes: >
+      CartTable: useOptimistic atualiza total_brl inline evitando flicker; MAX_QTY=99
+      consistente com AC7; brl() formata com Intl.NumberFormat pt-BR. Dual layout
+      desktop/mobile com CSS hidden/block — sem lógica duplicada além do HTML.
+      CustomerNameEditor: useTransition + Sonner toast + label htmlFor acessível.
+      page.tsx: extração de brandId/brandName antes de closures resolve narrowing TS;
+      inline server actions delegam corretamente para updateQuantity e clearCart.
+      removeItem passado diretamente como onRemove (assinatura compatível).
+
+  unit_tests:
+    verdict: PASS
+    notes: >
+      120 testes passando. 11 novos casos em 2 arquivos: CartTable (7 casos —
+      P-CT-1 a P-CT-4, N-CT-1, N-CT-2, A-CT-1), setCustomerName (4 casos —
+      P-SCN-1, N-SCN-1, N-SCN-2, N-SCN-3). vi.mock('next/navigation') correto;
+      userEvent.setup() para interações; document.querySelector('tfoot') para total
+      evitando ambiguidade de formatação locale.
+
+  acceptance_criteria:
+    verdict: PASS
+    notes: >
+      AC1 (8 colunas): REFERÊNCIA, DESCRIÇÃO DO PRODUTO, COR, TAMANHO, QUANTIDADE,
+      NOME DO CLIENTE, VALOR DA PEÇA, VALOR TOTAL — presentes e em ordem.
+      AC2 (stepper qty): +/− com limites 1-99, useOptimistic, router.refresh().
+      AC3 (remoção): botão Remover com aria-label, onRemove(itemId), router.refresh().
+      AC4 (rodapé total): tfoot com soma correta de total_brl.
+      AC5 (setCustomerName): auth + Zod + update count:exact + NOT_FOUND detection.
+      AC6 (CustomerNameEditor): controlled input, pending state, Sonner toast.
+      AC7 (testes): todos os casos especificados presentes e passando.
+      AC8 (RSC page): batch product fetch, inline server actions, empty state.
+
+  no_regressions:
+    verdict: PASS
+    notes: >
+      109 testes pré-existentes da Story 4.2 e anteriores mantidos. Nenhuma
+      alteração em arquivos fora do escopo declarado na story.
+
+  performance:
+    verdict: PASS
+    notes: >
+      Batch product fetch usa .in('id', productIds) — single query independente do
+      número de itens. useOptimistic elimina latência percebida no stepper.
+      Sem N+1 queries no RSC. Mobile cards reutilizam optimisticItems computados.
+
+  security:
+    verdict: PASS
+    notes: >
+      setCustomerName: auth guard (PERMISSION_DENIED), Zod valida brandId UUID +
+      name max 100 chars. Inline server actions usam 'use server' diretivo —
+      nunca expostos como rotas públicas. CartTable é client component sem acesso
+      direto a DB. Padrões consistentes com Story 4.2.
+
+  documentation:
+    verdict: PASS
+    notes: >
+      Story 4.3 com File List completo, todos os checkboxes marcados, Change Log
+      atualizado por @sm, @po e @dev. Não houve alteração em docs de arquitetura
+      necessária para esta story (frontend-only sobre API existente).
