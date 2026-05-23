@@ -1,0 +1,45 @@
+schema: 1
+story: '3.4'
+gate: PASS
+status_reason: >
+  Todos os 9 ACs verificados contra a implementação — RLS, grid responsivo, card completo, debounce,
+  filtros client-side, signed URL com TTL, estados vazios, a11y e 4 testes unitários passando (91/91 total).
+reviewer: 'Quinn'
+updated: '2026-05-23T10:25:00Z'
+top_issues:
+  - id: 'MNT-001'
+    severity: low
+    finding: >
+      alert() usado para erros de PDF download em brand-storefront-view.tsx:71.
+      Primitivo e inconsistente com o padrão de toast adotado no Epic 3; bloqueia o scroll e
+      não permite customização visual. Sem impacto funcional.
+    suggested_action: >
+      Substituir por toast unificado junto com o Epic 5 (UX polish). Mesma situação do MNT-001
+      de Story 3.3 — consolidar em uma única passagem.
+  - id: 'TEST-001'
+    severity: low
+    finding: >
+      getApprovedProductsForStorefront (lib/products/actions.ts) não tem teste unitário.
+      A função é um query pass-through sem lógica de negócio (sem branches), portanto o risco
+      de regressão silenciosa é baixo, mas é inconsistente com o padrão do projeto de testar
+      todas as novas funções de Server Action.
+    suggested_action: >
+      Adicionar P-GSFS-1 (retorna produtos approved ordenados) e N-GSFS-1 (retorna [] em erro)
+      no próximo sprint de manutenção. Não bloqueia esta story pois AC9 está satisfeito pelos
+      4 casos especificados.
+waiver: { active: false }
+quality_gates:
+  lint: PASS
+  typecheck: PASS
+  tests: PASS
+  test_count: '91/91'
+ac_coverage:
+  AC1: PASS  # getBrandBySlug + notFound() + RLS brands_customer_read_published + products_customer_read
+  AC2: PASS  # grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 + loading="lazy" em ProductGridCard
+  AC3: PASS  # imagem+fallback SVG, referência mono, line-clamp-2, Intl.NumberFormat BRL, badge LOOK
+  AC4: PASS  # useEffect+setTimeout(300)+clearTimeout, toLowerCase().includes(), debouncedSearch
+  AC5: PASS  # LOOK chips multi-select (new Set), tamanhos fieldset/checkboxes, useMemo
+  AC6: PASS  # getCatalogSignedUrl TTL 300s, useTransition, "Gerando link…", window.open(_blank)
+  AC7: PASS  # "Esta vitrine não tem produtos ainda." (products.length=0) + "Nenhum produto encontrado." (filtros ativos)
+  AC8: PASS  # article tabIndex={0}, onKeyDown Enter/Space, aria-label busca, fieldset/legend tamanhos, aria-busy PDF
+  AC9: PASS  # P-GSB-1, N-GSB-1, P-PDF-1, N-PDF-1 implementados e passando
