@@ -1,0 +1,41 @@
+schema: 1
+story: '3.3'
+gate: PASS
+status_reason: >
+  Todos os 6 ACs verificados e quality gates passando (lint/typecheck/87 testes, 4 novos).
+  Server Action com duplo ownership lock, validação server-side de pré-condições, audit event.
+  Componente com modal <dialog> nativo, badge de status, feedback optimista e texto explicativo.
+reviewer: 'Quinn'
+updated: '2026-05-23T09:37:00Z'
+top_issues:
+  - id: 'MNT-001'
+    severity: low
+    finding: >
+      setTimeout em showToast sem cleanup via useEffect — pode disparar setState em componente
+      desmontado se o usuário navegar para fora dentro de 4 segundos após um toast. Comportamento
+      cosmético (warning no console em dev), sem impacto funcional.
+    suggested_action: >
+      Refatorar showToast para useEffect com clearTimeout no cleanup. Baixa prioridade;
+      corrigir junto com o toast unificado no Epic 5 (UX polish).
+  - id: 'TEST-001'
+    severity: low
+    finding: >
+      Cobertura de testes não inclui cenários N-AUTH-1 (usuário não autenticado) e N-OWN-1
+      (brand não pertence ao usuário). Esses fluxos existem na implementação mas não têm teste
+      dedicado — AC6 exige apenas os 4 casos especificados (P-PUB-1, N-PUB-1, N-PUB-2, P-UNPUB-1).
+    suggested_action: >
+      Adicionar N-AUTH-1 e N-OWN-1 em sprint seguinte para completar a cobertura de edge cases
+      da Server Action. Não bloqueia esta story pois AC6 está satisfeito.
+waiver: { active: false }
+quality_gates:
+  lint: PASS
+  typecheck: PASS
+  tests: PASS
+  test_count: '87/87'
+ac_coverage:
+  AC1: PASS  # Seção "Publicação da vitrine" + modal <dialog> + botões "Confirmar"/"Cancelar"
+  AC2: PASS  # canPublish = approved>0 && extracted===0; disabledReason exibido quando desabilitado
+  AC3: PASS  # Server Action atualiza brands.published corretamente; RLS é garantia de schema
+  AC4: PASS  # auth check, ownership check, validação extracted/approved, published_at, logAuditEvent
+  AC5: PASS  # published=false pula validação de contagens; P-UNPUB-1 verifica fromMock 2x
+  AC6: PASS  # P-PUB-1, N-PUB-1, N-PUB-2, P-UNPUB-1 implementados e passando
