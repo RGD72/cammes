@@ -39,13 +39,26 @@ export default async function BrandDetailPage({ params }: Props) {
     data: { user },
   } = await supabaseUser.auth.getUser()
 
-  const [brand, catalog, openRouterStatus] = await Promise.all([
+  const [brand, catalog, openRouterStatus, approvedResult, extractedResult] = await Promise.all([
     getBrand(id),
     getCatalogByBrand(id),
     getOpenRouterStatus(),
+    supabaseUser
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', id)
+      .eq('status', 'approved'),
+    supabaseUser
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', id)
+      .eq('status', 'extracted'),
   ])
 
   if (!brand) notFound()
+
+  const approvedCount = approvedResult.count ?? 0
+  const extractedCount = extractedResult.count ?? 0
 
   const { activeJobId, failedJobId } = catalog && user
     ? await getJobStatuses(catalog.id, user.id)
@@ -59,6 +72,8 @@ export default async function BrandDetailPage({ params }: Props) {
       modelId={openRouterStatus.model}
       activeJobId={activeJobId}
       failedJobId={failedJobId}
+      approvedCount={approvedCount}
+      extractedCount={extractedCount}
     />
   )
 }

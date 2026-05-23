@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { logAuditEvent } from '@/lib/audit/log-event'
 
 export interface Brand {
   id: string
@@ -90,4 +91,68 @@ export async function listAdminBrands(): Promise<Brand[]> {
 
   if (error || !data) return []
   return data as Brand[]
+}
+
+export async function toggleBrandPublished(
+  brandId: string,
+  published: boolean,
+): Promise<BrandActionResult> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return { brand: null, error: 'Usuário não autenticado.' }
+
+  const { data: existing } = await supabase
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('owner_admin_id', user.id)
+    .single()
+
+  if (!existing) return { brand: null, error: 'Marca não encontrada ou acesso negado.' }
+
+  if (published) {
+    const { count: extractedCount } = await supabase
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+      .eq('status', 'extracted')
+
+    if ((extractedCount ?? 0) > 0) {
+      return { brand: null, error: 'Conclua a revisão dos produtos extraídos antes de publicar.' }
+    }
+
+    const { count: approvedCount } = await supabase
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+      .eq('status', 'approved')
+
+    if ((approvedCount ?? 0) === 0) {
+      return { brand: null, error: 'Aprove ao menos 1 produto antes de publicar a vitrine.' }
+    }
+  }
+
+  const { data: brand, error } = await supabase
+    .from('brands')
+    .update({
+      published,
+      published_at: published ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', brandId)
+    .eq('owner_admin_id', user.id)
+    .select()
+    .single()
+
+  if (error) return { brand: null, error: error.message }
+
+  await logAuditEvent(published ? 'brand_published' : 'brand_unpublished', {
+    brandId,
+    adminId: user.id,
+  })
+
+  return { brand: brand as Brand, error: null }
 }

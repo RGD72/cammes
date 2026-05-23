@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { CatalogUploadZone } from '@/components/admin/catalog-upload-zone'
 import { ExtractionEstimateCard } from '@/components/admin/extraction-estimate-card'
+import { BrandPublishToggle } from '@/components/admin/brand-publish-toggle'
 import type { Brand } from '@/lib/brands/actions'
 import type { Catalog } from '@/lib/catalogs/actions'
 
@@ -22,9 +23,11 @@ interface Props {
   modelId: string
   activeJobId?: string
   failedJobId?: string
+  approvedCount: number
+  extractedCount: number
 }
 
-export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterKey, modelId, activeJobId, failedJobId }: Props) {
+export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterKey, modelId, activeJobId, failedJobId, approvedCount, extractedCount }: Props) {
   const [catalog, setCatalog] = useState<Catalog | null>(initialCatalog)
 
   return (
@@ -43,6 +46,16 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
             className="mt-3 h-12 w-auto object-contain"
           />
         )}
+      </div>
+
+      <div>
+        <h2 className="text-base font-medium mb-3">Publicação da vitrine</h2>
+        <BrandPublishToggle
+          brandId={brand.id}
+          initialPublished={brand.published}
+          approvedCount={approvedCount}
+          extractedCount={extractedCount}
+        />
       </div>
 
       <div>
