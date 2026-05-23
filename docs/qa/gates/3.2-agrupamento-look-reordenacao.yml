@@ -1,0 +1,40 @@
+schema: 1
+story: '3.2'
+gate: CONCERNS
+status_reason: >
+  Todos os 6 ACs e quality gates passam (lint/typecheck/83 testes).
+  Uma preocupação média: após arrastar um card, filteredProducts re-aplica o sort
+  por extraction_confidence, revertendo a ordem visual imediatamente — embora o
+  display_order seja persistido corretamente no banco. Recomenda-se corrigir em sprint
+  seguinte desacoplando o sort de confiança do estado de reordenação DnD.
+reviewer: 'Quinn'
+updated: '2026-05-22T23:57:30Z'
+top_issues:
+  - id: 'MNT-001'
+    severity: medium
+    finding: >
+      filteredProducts re-ordena por extraction_confidence após cada arrayMove,
+      fazendo os cards voltarem visualmente à ordem pré-drag mesmo após uma
+      operação de DnD bem-sucedida. O display_order é persistido corretamente
+      no banco, mas o feedback visual otimista (AC2 — "estado local reflete a
+      nova ordem imediatamente") não se materializa na tela até o próximo reload.
+    suggested_action: >
+      Separar a lógica de ordenação em dois passos: (1) aplicar display_order
+      como critério de sort primário quando disponível, desativando o sort por
+      confiança no modo flat após o primeiro DnD; ou (2) manter um estado
+      separado "draggedOrder" que sobrepõe o sort por confiança. Toast "Ordem salva"
+      mitiga parcialmente o problema (usuário recebe confirmação), mas a UX ainda é
+      confusa. Prioridade: antes da Story 3.5 (vitrine do cliente).
+waiver: { active: false }
+quality_gates:
+  lint: PASS
+  typecheck: PASS
+  tests: PASS
+  test_count: '83/83'
+ac_coverage:
+  AC1: PASS  # look_group inline com datalist, revert otimista, toast
+  AC2: PARTIAL  # persistência OK; visual otimista não reflete nova ordem (MNT-001)
+  AC3: PASS  # toggle agrupado, details/summary, Sem LOOK ao final
+  AC4: PASS  # persistência imediata, toasts em ambas operações
+  AC5: PASS  # ownership check, batch update com eq brand_id
+  AC6: PASS  # P-OR-1 e N-OR-1 presentes e passando
