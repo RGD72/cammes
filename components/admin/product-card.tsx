@@ -25,10 +25,11 @@ const CONFIDENCE_BADGE: Record<'high' | 'medium' | 'low', { label: string; class
 interface InlineFieldProps {
   value: string
   multiline?: boolean
+  inputProps?: React.InputHTMLAttributes<HTMLInputElement>
   onSave: (v: string) => Promise<void>
 }
 
-function InlineField({ value, multiline, onSave }: InlineFieldProps) {
+function InlineField({ value, multiline, inputProps, onSave }: InlineFieldProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   const [isPending, startTransition] = useTransition()
@@ -62,7 +63,7 @@ function InlineField({ value, multiline, onSave }: InlineFieldProps) {
     return multiline ? (
       <textarea {...commonProps} rows={3} />
     ) : (
-      <input {...commonProps} />
+      <input {...commonProps} {...inputProps} />
     )
   }
 
@@ -82,23 +83,27 @@ function InlineField({ value, multiline, onSave }: InlineFieldProps) {
 interface ProductCardProps {
   product: Product
   selected: boolean
+  availableLooks: string[]
   onToggleSelect: () => void
   onProductUpdate: (updated: Product) => void
   onError: (msg: string) => void
+  onSuccess?: (msg: string) => void
 }
 
 export function ProductCard({
   product,
   selected,
+  availableLooks,
   onToggleSelect,
   onProductUpdate,
   onError,
+  onSuccess,
 }: ProductCardProps) {
   const [localProduct, setLocalProduct] = useState(product)
   const confidenceLevel = getConfidenceLevel(localProduct.extraction_confidence)
 
   async function handleSave(
-    field: 'reference' | 'description' | 'price_brl',
+    field: 'reference' | 'description' | 'price_brl' | 'look_group',
     rawValue: string,
   ) {
     const previous = localProduct
@@ -107,6 +112,8 @@ export function ProductCard({
     if (field === 'price_brl') {
       const parsed = parseFloat(rawValue.replace(',', '.'))
       value = isNaN(parsed) ? null : parsed
+    } else if (field === 'look_group') {
+      value = rawValue.trim() || null
     }
 
     const optimistic = { ...localProduct, [field]: value }
@@ -124,6 +131,7 @@ export function ProductCard({
     } else if (result.product) {
       setLocalProduct(result.product)
       onProductUpdate(result.product)
+      if (field === 'look_group') onSuccess?.('LOOK atualizado')
     }
   }
 
@@ -236,6 +244,20 @@ export function ProductCard({
             </div>
           </div>
         )}
+
+        <div>
+          <p className="text-xs text-foreground/50 mb-0.5">LOOK</p>
+          <InlineField
+            value={localProduct.look_group ?? ''}
+            inputProps={{ list: `looks-${localProduct.id}` }}
+            onSave={(v) => handleSave('look_group', v)}
+          />
+          <datalist id={`looks-${localProduct.id}`}>
+            {availableLooks.map((look) => (
+              <option key={look} value={look} />
+            ))}
+          </datalist>
+        </div>
 
         <div className="mt-auto pt-1">
           <span

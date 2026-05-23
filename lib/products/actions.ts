@@ -43,7 +43,7 @@ export async function getProductsForReview(brandId: string): Promise<Product[]> 
 export async function updateProduct(
   productId: string,
   brandId: string,
-  data: Partial<Pick<Product, 'reference' | 'description' | 'price_brl'>>,
+  data: Partial<Pick<Product, 'reference' | 'description' | 'price_brl' | 'look_group'>>,
 ): Promise<{ product: Product | null; error: string | null }> {
   const supabase = await createServerSupabaseClient()
   const {
@@ -103,4 +103,41 @@ export async function bulkUpdateProductStatus(
 
   if (error) return { updated: 0, error: error.message }
   return { updated: productIds.length, error: null }
+}
+
+export async function updateProductsOrder(
+  orderedIds: string[],
+  brandId: string,
+): Promise<{ updated: number; error: string | null }> {
+  if (orderedIds.length === 0) return { updated: 0, error: null }
+
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { updated: 0, error: 'Usuário não autenticado.' }
+
+  const { data: owned, error: checkError } = await supabase
+    .from('products')
+    .select('id')
+    .in('id', orderedIds)
+    .eq('brand_id', brandId)
+
+  if (checkError) return { updated: 0, error: checkError.message }
+  if (!owned || owned.length !== orderedIds.length) {
+    return { updated: 0, error: 'Alguns produtos não pertencem à marca ou não foram encontrados.' }
+  }
+
+  const now = new Date().toISOString()
+  await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase
+        .from('products')
+        .update({ display_order: index, updated_at: now })
+        .eq('id', id)
+        .eq('brand_id', brandId),
+    ),
+  )
+
+  return { updated: orderedIds.length, error: null }
 }

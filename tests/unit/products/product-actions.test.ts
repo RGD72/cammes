@@ -4,7 +4,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(),
 }))
 
-import { updateProduct, bulkUpdateProductStatus } from '@/lib/products/actions'
+import { updateProduct, bulkUpdateProductStatus, updateProductsOrder } from '@/lib/products/actions'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 const mockUser = { id: 'admin-user-id' }
@@ -152,6 +152,65 @@ describe('bulkUpdateProductStatus', () => {
     ;(createServerSupabaseClient as ReturnType<typeof vi.fn>).mockResolvedValue(client)
 
     const result = await bulkUpdateProductStatus(productIds, 'brand-1', 'approved')
+
+    expect(result.updated).toBe(0)
+    expect(result.error).toBeTruthy()
+    expect(result.error).toContain('não pertencem')
+  })
+})
+
+describe('updateProductsOrder', () => {
+  it('P-OR-1: persiste display_order em batch e retorna updated = N', async () => {
+    const orderedIds = ['p1', 'p2', 'p3']
+    const ownedProducts = [{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }]
+
+    const checkChain = makeChain({ data: ownedProducts, error: null })
+    checkChain.in = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: ownedProducts, error: null }),
+    })
+
+    // Each individual update call: .update().eq('id').eq('brand_id') resolves
+    const makeUpdateCall = () => ({
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+      }),
+    })
+
+    let callCount = 0
+    const fromMock = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return checkChain
+      return makeUpdateCall()
+    })
+
+    const client = { ...makeUserClient(), from: fromMock }
+    ;(createServerSupabaseClient as ReturnType<typeof vi.fn>).mockResolvedValue(client)
+
+    const result = await updateProductsOrder(orderedIds, 'brand-1')
+
+    expect(result.error).toBeNull()
+    expect(result.updated).toBe(3)
+    // check: from() called once for ownership check + 3 times for individual updates
+    expect(fromMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('N-OR-1: retorna erro se IDs não pertencem à marca', async () => {
+    const orderedIds = ['p1', 'p2']
+    // Only 1 of 2 owned
+    const partialOwned = [{ id: 'p1' }]
+
+    const checkChain = makeChain({ data: partialOwned, error: null })
+    checkChain.in = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: partialOwned, error: null }),
+    })
+
+    const fromMock = vi.fn().mockReturnValue(checkChain)
+    const client = { ...makeUserClient(), from: fromMock }
+    ;(createServerSupabaseClient as ReturnType<typeof vi.fn>).mockResolvedValue(client)
+
+    const result = await updateProductsOrder(orderedIds, 'brand-1')
 
     expect(result.updated).toBe(0)
     expect(result.error).toBeTruthy()

@@ -1,12 +1,29 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useTransition, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { ProductCard } from '@/components/admin/product-card'
 import { ProductReviewFilters } from '@/components/admin/product-review-filters'
 import type { ReviewFilters } from '@/components/admin/product-review-filters'
-import { bulkUpdateProductStatus } from '@/lib/products/actions'
+import { bulkUpdateProductStatus, updateProductsOrder } from '@/lib/products/actions'
 import { retriggerExtraction } from '@/lib/catalogs/retrigger-actions'
 import type { Product } from '@/lib/products/actions'
 
@@ -15,6 +32,51 @@ function getConfidenceAvg(confidence: Record<string, number> | null): number {
   const values = Object.values(confidence).filter((v) => typeof v === 'number')
   if (values.length === 0) return Infinity
   return values.reduce((a, b) => a + b, 0) / values.length
+}
+
+interface SortableProductCardProps {
+  product: Product
+  selected: boolean
+  availableLooks: string[]
+  onToggleSelect: () => void
+  onProductUpdate: (updated: Product) => void
+  onError: (msg: string) => void
+  onSuccess: (msg: string) => void
+}
+
+function SortableProductCard({
+  product,
+  selected,
+  availableLooks,
+  onToggleSelect,
+  onProductUpdate,
+  onError,
+  onSuccess,
+}: SortableProductCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: product.id,
+  })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    cursor: 'grab',
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <ProductCard
+        product={product}
+        selected={selected}
+        availableLooks={availableLooks}
+        onToggleSelect={onToggleSelect}
+        onProductUpdate={onProductUpdate}
+        onError={onError}
+        onSuccess={onSuccess}
+      />
+    </div>
+  )
 }
 
 interface Props {
@@ -31,22 +93,39 @@ export function ProductReviewView({ brandId, catalogId, initialProducts }: Props
     filterLook: '',
     filterStatus: 'all',
   })
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ msg: string; type: 'error' | 'success' } | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat')
+  const [activeId, setActiveId] = useState<string | null>(null)
   const router = useRouter()
 
+  const currentOrderRef = useRef<Product[]>(products)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
+  )
+
   function showError(msg: string) {
-    setToast(msg)
+    setToast({ msg, type: 'error' })
     setTimeout(() => setToast(null), 4000)
   }
 
-  const lookOptions = useMemo(() => {
+  function showSuccess(msg: string) {
+    setToast({ msg, type: 'success' })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const availableLooks = useMemo(() => {
     const seen = new Set<string>()
     for (const p of products) {
       if (p.look_group) seen.add(p.look_group)
     }
     return Array.from(seen).sort()
   }, [products])
+
+  const lookOptions = availableLooks
 
   const filteredProducts = useMemo(() => {
     return products
@@ -63,6 +142,16 @@ export function ProductReviewView({ brandId, catalogId, initialProducts }: Props
       })
       .sort((a, b) => getConfidenceAvg(a.extraction_confidence) - getConfidenceAvg(b.extraction_confidence))
   }, [products, filters])
+
+  const groupedProducts = useMemo(() => {
+    const map = new Map<string, Product[]>()
+    for (const p of filteredProducts) {
+      const key = p.look_group ?? ''
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(p)
+    }
+    return map
+  }, [filteredProducts])
 
   const approvedCount = products.filter((p) => p.status === 'approved').length
   const extractedCount = products.filter((p) => p.status === 'extracted').length
@@ -107,6 +196,32 @@ export function ProductReviewView({ brandId, catalogId, initialProducts }: Props
     })
   }
 
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    setActiveId(null)
+    if (!over || active.id === over.id) return
+
+    setProducts((prev) => {
+      const oldIndex = prev.findIndex((p) => p.id === active.id)
+      const newIndex = prev.findIndex((p) => p.id === over.id)
+      const reordered = arrayMove(prev, oldIndex, newIndex)
+      currentOrderRef.current = reordered
+      return reordered
+    })
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(async () => {
+      const result = await updateProductsOrder(
+        currentOrderRef.current.map((p) => p.id),
+        brandId,
+      )
+      if (result.error) showError(result.error)
+      else showSuccess('Ordem salva')
+    }, 300)
+  }
+
+  const activeProduct = activeId ? products.find((p) => p.id === activeId) : null
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -118,6 +233,15 @@ export function ProductReviewView({ brandId, catalogId, initialProducts }: Props
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setViewMode((v) => (v === 'flat' ? 'grouped' : 'flat'))}
+            className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors ${
+              viewMode === 'grouped' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+            }`}
+          >
+            {viewMode === 'grouped' ? 'Vista em grid' : 'Agrupar por LOOK'}
+          </button>
           <button
             type="button"
             onClick={handleRetrigger}
@@ -190,24 +314,85 @@ export function ProductReviewView({ brandId, catalogId, initialProducts }: Props
         <p className="py-12 text-center text-sm text-foreground/40">
           Nenhum produto encontrado com os filtros aplicados.
         </p>
+      ) : viewMode === 'flat' ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={(e) => setActiveId(String(e.active.id))}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveId(null)}
+        >
+          <SortableContext items={filteredProducts.map((p) => p.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {filteredProducts.map((product) => (
+                <SortableProductCard
+                  key={product.id}
+                  product={product}
+                  selected={selectedIds.has(product.id)}
+                  availableLooks={availableLooks}
+                  onToggleSelect={() => handleToggleSelect(product.id)}
+                  onProductUpdate={handleProductUpdate}
+                  onError={showError}
+                  onSuccess={showSuccess}
+                />
+              ))}
+            </div>
+          </SortableContext>
+          <DragOverlay>
+            {activeProduct ? (
+              <div className="opacity-90 shadow-2xl rotate-1 scale-105">
+                <ProductCard
+                  product={activeProduct}
+                  selected={selectedIds.has(activeProduct.id)}
+                  availableLooks={availableLooks}
+                  onToggleSelect={() => {}}
+                  onProductUpdate={() => {}}
+                  onError={() => {}}
+                />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {filteredProducts.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              selected={selectedIds.has(product.id)}
-              onToggleSelect={() => handleToggleSelect(product.id)}
-              onProductUpdate={handleProductUpdate}
-              onError={showError}
-            />
-          ))}
+        <div className="space-y-6">
+          {Array.from(groupedProducts.entries())
+            .sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)))
+            .map(([look, items]) => (
+              <details key={look || '__no-look__'} open>
+                <summary className="cursor-pointer select-none rounded-lg border bg-muted/30 px-4 py-2 text-sm font-medium hover:bg-muted">
+                  {look || 'Sem LOOK'}{' '}
+                  <span className="text-foreground/50">({items.length} produto{items.length !== 1 ? 's' : ''})</span>
+                </summary>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 mt-3">
+                  {items.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      selected={selectedIds.has(product.id)}
+                      availableLooks={availableLooks}
+                      onToggleSelect={() => handleToggleSelect(product.id)}
+                      onProductUpdate={handleProductUpdate}
+                      onError={showError}
+                      onSuccess={showSuccess}
+                    />
+                  ))}
+                </div>
+              </details>
+            ))}
         </div>
       )}
 
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 rounded-lg border border-red-200 bg-red-50 px-4 py-3 shadow-lg">
-          <p className="text-sm text-red-700">{toast}</p>
+        <div
+          className={`fixed bottom-6 right-6 z-50 rounded-lg border px-4 py-3 shadow-lg ${
+            toast.type === 'success'
+              ? 'border-green-200 bg-green-50'
+              : 'border-red-200 bg-red-50'
+          }`}
+        >
+          <p className={`text-sm ${toast.type === 'success' ? 'text-green-700' : 'text-red-700'}`}>
+            {toast.msg}
+          </p>
         </div>
       )}
     </div>
