@@ -300,3 +300,43 @@ export async function clearCart(brandId: string): Promise<Result<void>> {
   if (error) return internalError('Erro ao limpar carrinho')
   return { ok: true, data: undefined }
 }
+
+const SetCustomerNameSchema = z.object({
+  brandId: z.string().uuid(),
+  name: z.string().min(1).max(100),
+})
+
+export async function setCustomerName(brandId: string, name: string): Promise<Result<void>> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return permissionDenied()
+
+  const parsed = SetCustomerNameSchema.safeParse({ brandId, name })
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Dados inválidos',
+        details: parsed.error.flatten().fieldErrors,
+        timestamp: new Date().toISOString(),
+        requestId: crypto.randomUUID(),
+      },
+    }
+  }
+
+  const { error, count } = await supabase
+    .from('carts')
+    .update(
+      { customer_name: parsed.data.name, updated_at: new Date().toISOString() },
+      { count: 'exact' }
+    )
+    .eq('user_id', user.id)
+    .eq('brand_id', parsed.data.brandId)
+
+  if (error) return internalError('Erro ao atualizar nome do cliente')
+  if (!count || count === 0) return notFound('Carrinho não encontrado')
+  return { ok: true, data: undefined }
+}
