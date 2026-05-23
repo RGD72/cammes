@@ -93,6 +93,32 @@ export async function listAdminBrands(): Promise<Brand[]> {
   return data as Brand[]
 }
 
+export interface BrandForCustomer {
+  id: string
+  slug: string
+  name: string
+  description: string | null
+  logo_url: string | null
+  product_count: number
+}
+
+export async function getBrandsForCustomer(): Promise<BrandForCustomer[]> {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('brands')
+    .select('id, slug, name, description, logo_url, products(count)')
+    .order('name', { ascending: true })
+  if (error || !data) return []
+  return data.map((b) => ({
+    id: b.id,
+    slug: b.slug,
+    name: b.name,
+    description: b.description,
+    logo_url: b.logo_url,
+    product_count: (b.products as unknown as [{ count: number }])?.[0]?.count ?? 0,
+  }))
+}
+
 export async function getBrandBySlug(slug: string): Promise<Brand | null> {
   const supabase = await createServerSupabaseClient()
   const { data, error } = await supabase
