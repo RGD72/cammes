@@ -1,0 +1,31 @@
+schema: 1
+story: '3.5'
+gate: PASS
+status_reason: >
+  Todos os 5 ACs verificados contra a implementação — RLS brands_customer_read_published,
+  BrandCard com logo/fallback/line-clamp-2/product_count, Link de navegação, estado vazio
+  e 2 testes unitários passando (93/93 total).
+reviewer: 'Quinn'
+updated: '2026-05-23T10:50:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: >
+      N-GBC-1 testa apenas o path com error != null. O path data=null, error=null
+      (Supabase retornando nulo sem erro) é coberto pela lógica `if (error || !data)` mas
+      não por teste explícito. Sem impacto funcional pois a query não gera esse estado em produção.
+    suggested_action: >
+      Adicionar N-GBC-2 (data=null, error=null → retorna []) no próximo sprint de manutenção.
+      Mesmo padrão pendente da Story 3.4 TEST-001 — consolidar em uma única passagem.
+waiver: { active: false }
+quality_gates:
+  lint: PASS
+  typecheck: PASS
+  tests: PASS
+  test_count: '93/93'
+ac_coverage:
+  AC1: PASS  # getBrandsForCustomer + RLS brands_customer_read_published via createServerSupabaseClient
+  AC2: PASS  # BrandCard: img+fallback SVG, h2 name, description line-clamp-2, product_count pluralizado
+  AC3: PASS  # <Link href=/brands/${slug}> envolve card inteiro — navegável por teclado
+  AC4: PASS  # brands.length===0 → "Você ainda não tem marcas disponíveis. Entre em contato..."
+  AC5: PASS  # P-GBC-1 (retorna array com product_count correto) e N-GBC-1 (retorna [] em erro) passando
