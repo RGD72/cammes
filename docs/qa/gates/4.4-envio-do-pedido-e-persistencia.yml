@@ -1,0 +1,120 @@
+schema: 1
+story: '4.4'
+gate: PASS
+status_reason: >
+  Todos os 8 ACs verificados. submitOrder cria orders + order_items (snapshot 8 colunas),
+  idempotência por UNIQUE (customer_user_id, client_idempotency_key), admin_notifications INSERT,
+  audit log, tela de sucesso e detalhe read-only implementados. 126 testes passando, lint 0 erros,
+  typecheck 0 erros.
+reviewer: Quinn
+updated: '2026-05-24T09:30:00Z'
+top_issues:
+  - id: 'MNT-001'
+    severity: low
+    finding: >
+      cart_items DELETE (step 11 em submitOrder) não verifica o resultado da operação;
+      se o delete falhar, o pedido é criado com sucesso mas o carrinho permanece populado.
+      Em re-mount do SubmitOrderSection, nova idempotency key seria gerada e o usuário
+      poderia criar um pedido duplicado ao retentar.
+    suggested_action: >
+      Em hardening pós-MVP, verificar resultado do DELETE e retornar erro ou usar
+      RPC PL/pgSQL com transação real. Impacto baixo no MVP pois re-mount da página
+      requer navegação — improvável em fluxo normal.
+
+  - id: 'MNT-002'
+    severity: low
+    finding: >
+      Tooltip "Gerando PDF..." em success/page.tsx usa classe group-hover:opacity-100 mas
+      o elemento pai (div.relative) não possui classe group — tooltip CSS nunca é exibido.
+      O atributo nativo title="Gerando PDF..." ainda funciona como fallback.
+    suggested_action: >
+      Adicionar classe group ao div.relative pai ou remover o tooltip CSS e confiar
+      apenas no title nativo. Sem impacto funcional — Story 4.5 substituirá o botão.
+
+  - id: 'TEST-001'
+    severity: low
+    finding: >
+      makeDeleteChain helper definido no arquivo de testes mas não utilizado
+      (P-SO-1 usa deleteChain inline). Dead code no suite de testes.
+    suggested_action: >
+      Remover makeDeleteChain em limpeza futura do arquivo de testes.
+
+  - id: 'TEST-002'
+    severity: low
+    finding: >
+      Ausência de teste para caminho Zod VALIDATION_ERROR (brandId ou
+      clientIdempotencyKey com UUID inválido). Zod rejeita corretamente em runtime
+      mas o caminho N-SO-VALIDATION não está coberto por teste unitário.
+    suggested_action: >
+      Adicionar N-SO-3 cobrindo input inválido em revisão futura; sem impacto no MVP.
+
+waiver:
+  active: false
+
+# --- Detalhamento da Revisão ---
+
+checks:
+  code_review:
+    verdict: PASS
+    notes: >
+      submitOrder: fluxo 13 passos consistente com padrão lib/carts/actions.ts.
+      Helpers permissionDenied/notFound/internalError reutilizados. Result<T> sem
+      exceções em fluxo esperado. generateOrderNumber usa count:exact,head:true
+      evitando retorno de dados. ConfirmOrderDialog: role=dialog, aria-modal=true,
+      aria-labelledby — acessibilidade correta. SubmitOrderSection: idempotency key
+      estável via useState(() => crypto.randomUUID()). Decisão de service role para
+      INSERTs documentada no Dev Agent Record.
+
+  unit_tests:
+    verdict: PASS
+    notes: >
+      126 testes passando. 6 novos casos em submit-order.test.ts: P-SO-1, P-SO-2,
+      N-SO-1, N-SO-2, P-GO-1, N-GO-1 — todos os casos especificados pela story
+      presentes e passando. Mocking correto de createServerSupabaseClient +
+      createServiceRoleSupabaseClient + logAuditEvent. Mock de generateOrderNumber
+      via ordersCallCount correto.
+
+  acceptance_criteria:
+    verdict: PASS
+    notes: >
+      AC1: botão ENVIAR PEDIDO + modal com itemCount, totalBrl, Confirmar, Cancelar.
+      AC2: INSERT orders (order_number CMM-YYYYMM-seq, campos completos) + INSERT
+      order_items (snapshot 8 colunas por item). AC3: DELETE cart_items após INSERT.
+      AC4: INSERT admin_notifications com guard if(brand.owner_admin_id).
+      AC5: logAuditEvent order_submitted com order_id e brand_id.
+      AC6: redirect /orders/{id}/success com order_number, total, PDF desabilitado,
+      link vitrine. AC7: /orders/{id} tabela 8 colunas read-only + tfoot Total Geral.
+      AC8: idempotência por (customer_user_id, client_idempotency_key) antes de criar.
+
+  no_regressions:
+    verdict: PASS
+    notes: >
+      120 testes pré-existentes da Story 4.3 e anteriores mantidos. lib/types/index.ts
+      apenas adição de tipos (Order, OrderItem, OrderStatus, AdminNotification).
+      app/cart/[brand_slug]/page.tsx: adição de SubmitOrderSection sem alteração
+      de lógica existente.
+
+  performance:
+    verdict: PASS
+    notes: >
+      generateOrderNumber: 1 COUNT query por submissão aceitável para MVP.
+      Enriquecimento de produtos: .in('id', productIds) — query única sem N+1.
+      getOrder: 2 queries (order + items). Sequência de 8-9 ops em submitOrder é
+      limitação documentada de ausência de transação real no Supabase JS client.
+
+  security:
+    verdict: PASS
+    notes: >
+      Auth guard primeiro em submitOrder e getOrder. Zod valida brandId + clientIdempotencyKey
+      como UUID. Service role exclusivamente server-side em Server Action 'use server'.
+      RLS ativo em orders, order_items, admin_notifications. SUPABASE_SERVICE_ROLE_KEY
+      sem prefixo NEXT_PUBLIC_. client_idempotency_key UUID v4 imprevisível.
+      Guard if(brand.owner_admin_id) evita notificações órfãs.
+
+  documentation:
+    verdict: PASS
+    notes: >
+      Story 4.4 com File List completo, todos os checkboxes marcados. Dev Agent Record
+      com 5 decisões arquiteturais documentadas. Change Log atualizado por @sm, @po, @dev.
+      CodeRabbit disabled notice presente e correto. Risco de partial state documentado
+      na story com mitigação via idempotência e plano de hardening pós-MVP.
