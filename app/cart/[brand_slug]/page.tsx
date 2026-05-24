@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getCart, updateQuantity, removeItem, clearCart } from '@/lib/carts/actions'
 import { CartTable } from '@/components/customer/CartTable'
 import { CustomerNameEditor } from '@/components/customer/CustomerNameEditor'
+import { SubmitOrderSection } from '@/components/customer/SubmitOrderSection'
 import type { CartItemEnriched } from '@/components/customer/CartTable'
 
 interface Props {
@@ -88,6 +89,12 @@ export default async function CartPage({ params }: Props) {
         brandId={brandId}
         onChangeQty={handleChangeQty}
         onRemove={removeItem}
+      />
+
+      <SubmitOrderSection
+        brandId={brandId}
+        itemCount={items.length}
+        totalBrl={cartResult.data.total}
       />
     </div>
   )
