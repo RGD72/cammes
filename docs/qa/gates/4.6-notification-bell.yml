@@ -1,0 +1,85 @@
+schema: 1
+story: '4.6'
+gate: PASS
+status_reason: >
+  Todos os 9 ACs verificados e implementados corretamente. Segurança (auth guard + RLS + double-check
+  admin_user_id no UPDATE), badge com contagem, dropdown nativo, polling 30s, mark-read individual
+  e em lote, reactivity via router.refresh(). 137 testes passando (23 arquivos). Cinco observações
+  de baixa severidade documentadas como debt técnico sem impacto funcional.
+reviewer: Quinn
+updated: '2026-05-25T20:08:00Z'
+
+top_issues:
+  - id: MNT-005
+    severity: low
+    finding: >
+      Links de notificação implementados via router.push() em onClick, não como <a href>.
+      Impede Ctrl+Click para abrir em nova aba e não funciona sem JavaScript.
+    suggested_action: >
+      Para MVP admin (JS sempre disponível) é aceitável. Em revisão futura, considerar
+      wrapper <Link href> do Next.js com onClick para prevenção de default quando
+      mark-read estiver pendente.
+
+  - id: TEST-002
+    severity: low
+    finding: >
+      Ausência de teste negativo para markNotificationRead não autenticado (N-NOTIF-2).
+      O padrão está coberto em N-NOTIF-1 (getNotifications), mas mark-read não tem
+      teste de path não autenticado explícito.
+    suggested_action: >
+      Adicionar: it('N-NOTIF-2: não autenticado → markNotificationRead retorna PERMISSION_DENIED')
+      para cobertura simétrica com getNotifications.
+
+  - id: TEST-003
+    severity: low
+    finding: >
+      Ausência de testes para caminho de erro de banco (internalError) em getNotifications,
+      markNotificationRead e markAllNotificationsRead.
+    suggested_action: >
+      Adicionar teste com mock que retorna { error: { message: 'DB error' } } e verificar
+      que result.ok === false e result.error.code === 'INTERNAL'.
+
+  - id: MNT-006
+    severity: low
+    finding: >
+      relativeTime() retorna strings negativas (ex: "-5min atrás") para datas futuras.
+      Improvável em produção mas tecnicamente incorreto.
+    suggested_action: >
+      Adicionar: if (diff < 0) return 'agora' como primeira linha da função relativeTime.
+
+  - id: MNT-007
+    severity: low
+    finding: >
+      markNotificationRead recebe id: string sem validação de formato UUID antes
+      do uso em query. RLS protege contra abuso, mas validação defensiva seria melhor.
+    suggested_action: >
+      Adicionar validação: if (!id || typeof id !== 'string') return permissionDenied()
+      ou usar z.string().uuid().safeParse(id).
+
+waiver:
+  active: false
+
+validation_evidence:
+  lint: PASS — 0 erros
+  typecheck: PASS — 0 erros TypeScript
+  tests: PASS — 137/137 (23 test files; 6 novos: P-NOTIF-1, P-NOTIF-2, P-NOTIF-3, N-NOTIF-1, getUnreadCount×2)
+  build: NOT_RUN — sem alteração de infra; typecheck cobre tipos
+
+ac_traceability:
+  AC1: PASS — getUnreadCount() server-side no layout; badge condicional {count > 0 && (...)}; count=0 oculta
+  AC2: PASS — SELECT *, brands(name) WHERE read=false ORDER created_at DESC LIMIT 10; Bell icon; "Novo pedido — {brand_name}"; relativeTime; router.push para /admin/orders/{id}
+  AC3: PASS — handleMarkRead: markNotificationRead(id) → setCount/setNotifications otimista → router.refresh() → router.push
+  AC4: PASS — handleMarkAll: markAllNotificationsRead() → setCount(0)/setNotifications([]) → router.refresh()
+  AC5: PASS — estado local atualizado otimisticamente antes de router.refresh(); sem full page reload
+  AC6: PASS — useEffect com setInterval(30_000); cleanup clearInterval no return; atualiza apenas count
+  AC7: PASS — nenhuma lógica de inserção adicionada; submitOrder de Story 4.4 intacto (lib/orders/actions.ts:224)
+  AC8: PASS — implementação somente in-app; zero código de e-mail/push
+  AC9: PASS — todas as Server Actions usam createServerSupabaseClient (não service role); RLS notif_admin_own verificada
+
+security_review:
+  rls_check: PASS — notif_admin_own policy (FOR ALL USING admin_user_id = auth.uid()) cobre SELECT e UPDATE
+  auth_guard: PASS — getNotifications, markNotificationRead, markAllNotificationsRead verificam !user → PERMISSION_DENIED
+  double_check: PASS — markNotificationRead usa .eq('id', id).eq('admin_user_id', user.id) como defense in depth além de RLS
+  service_role: PASS — nenhum uso de createServiceRoleSupabaseClient em nenhuma das Actions
+  server_actions: PASS — 'use server' presente em lib/notifications/actions.ts; tipo NotificationWithBrand exportado é type-only (sem risk)
+  polling_security: PASS — getUnreadCount retorna 0 em qualquer falha (try/catch); não expõe detalhes de erro ao client
