@@ -36,14 +36,13 @@ export default async function OrderDetailPage({ params }: Props) {
           <h1 className="text-2xl font-semibold">Pedido {order.order_number}</h1>
           <p className="text-sm text-muted-foreground">{formatDate(order.submitted_at)}</p>
         </div>
-        <button
-          type="button"
-          disabled
-          title="Gerando PDF..."
-          className="cursor-not-allowed rounded-md border px-4 py-2 text-sm font-medium opacity-50"
+        <a
+          href={`/api/orders/${order.id}/pdf`}
+          download
+          className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
         >
           Baixar PDF
-        </button>
+        </a>
       </div>
 
       {/* Desktop table */}

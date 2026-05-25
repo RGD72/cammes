@@ -71,19 +71,13 @@ export default async function OrderSuccessPage({ params }: Props) {
             Ver detalhe do pedido
           </a>
 
-          <div className="relative">
-            <button
-              type="button"
-              disabled
-              title="Gerando PDF..."
-              className="cursor-not-allowed rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground opacity-50"
-            >
-              Baixar PDF
-            </button>
-            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-xs text-background opacity-0 transition-opacity group-hover:opacity-100">
-              Gerando PDF...
-            </span>
-          </div>
+          <a
+            href={`/api/orders/${order.id}/pdf`}
+            download={`pedido-${order.order_number}.pdf`}
+            className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Baixar PDF
+          </a>
         </div>
 
         {brandSlug && (
