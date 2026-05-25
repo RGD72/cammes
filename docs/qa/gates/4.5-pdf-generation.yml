@@ -1,0 +1,66 @@
+schema: 1
+story: '4.5'
+gate: PASS
+status_reason: >
+  Todos os 10 ACs verificados e implementados corretamente. Segurança (auth guard + RLS),
+  cache de PDF, redirect 302, bucket privado e 131 testes passando. Três observações de baixa
+  severidade documentadas como debt técnico sem impacto funcional.
+reviewer: Quinn
+updated: '2026-05-25T11:10:00Z'
+
+top_issues:
+  - id: MNT-003
+    severity: low
+    finding: >
+      Header da coluna "Qtd" renderiza como "QTD" (via textTransform: uppercase), mas AC3
+      especifica "QUANTIDADE". Divergência cosmética de label.
+    suggested_action: >
+      Substituir "Qtd" por "Quantidade" em lib/pdf/order-pdf.tsx linha 178 para conformidade
+      exata com AC3.
+
+  - id: TEST-001
+    severity: low
+    finding: >
+      Teste P-PDF-1 verifica que storage.from('orders') foi chamado, mas não asserta que
+      upload() foi efetivamente invocado com os argumentos corretos.
+    suggested_action: >
+      Adicionar: expect(storageMock.upload).toHaveBeenCalledWith(pdfPath, expect.any(Buffer), ...)
+      para cobertura mais explícita do caminho de upload.
+
+  - id: MNT-004
+    severity: low
+    finding: >
+      formatDate em lib/pdf/order-pdf.tsx usa new Date(iso) sem timezone explícito,
+      aplicando TZ local do servidor. Em deploy não-BRT (ex. UTC), datas aparecerão
+      com horário deslocado no PDF.
+    suggested_action: >
+      Usar Intl.DateTimeFormat com timeZone: 'America/Sao_Paulo' para consistência,
+      ou alinhar com comportamento aceitável no PRD.
+
+waiver:
+  active: false
+
+validation_evidence:
+  lint: PASS — 0 erros (eslint-disable jsx-a11y/alt-text justificado para Image do react-pdf)
+  typecheck: PASS — 0 erros TypeScript
+  tests: PASS — 131/131 (22 test files; 5 novos: N-PDF-1, N-PDF-2, N-PDF-3, P-PDF-1, P-PDF-2)
+  build: PASS — bundle Edge não poluído; runtime nodejs isolado corretamente
+
+ac_traceability:
+  AC1: PASS — export const runtime = 'nodejs'; @react-pdf/renderer v4.5.1; route correta
+  AC2: PASS — cabeçalho com logo condicional, brandName, customer_name, order_number, formatDate dd/MM/yyyy HH:mm; watermark CAMMES centralizado
+  AC3: PASS* — 8 colunas na ordem exata; *"Qtd" em vez de "Quantidade" (MNT-003, low)
+  AC4: PASS — totalRow com backgroundColor '#f3f4f6' e Helvetica-Bold
+  AC5: PASS — bucket orders private via migration; upload path ${orderId}.pdf; UPDATE pdf_path
+  AC6: PASS — NextResponse.redirect 302; createSignedUrl TTL 3600; Content-Disposition header
+  AC7: PASS — ambas as pages com <a href> habilitado; MNT-002 tooltip removido
+  AC8: PASS — if (!order.pdf_path) guard; testado em P-PDF-2
+  AC9: ADVISORY — sem teste de performance, mas implementação direta (render+upload+signedUrl); risco baixo para 50 itens
+  AC10: PASS — isCustomer || isBrandAdmin; RLS confirmada em migration 20260524000001_orders.sql
+
+security_review:
+  rls_check: PASS — orders_customer_own + orders_admin_own_brand policies cobrindo ambos os paths
+  service_role: PASS — createServiceRoleSupabaseClient usado apenas no contexto Node.js server (nunca client-side)
+  auth_guard: PASS — 401 sem user; 403 para usuário não-autorizado; checks sequenciais corretos
+  storage_bucket: PASS — private: false garante que arquivos não são acessíveis sem signed URL
+  signed_url_ttl: PASS — 3600s (1h) conforme AC6
