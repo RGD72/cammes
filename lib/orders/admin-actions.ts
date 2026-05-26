@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { logAuditEvent } from '@/lib/audit/log-event'
 import type { Result, Order, OrderItem, OrderStatus } from '@/lib/types/index'
 
 const PAGE_SIZE = 25
@@ -146,6 +147,8 @@ export async function markOrderViewed(orderId: string): Promise<Result<void>> {
     .eq('id', orderId)
 
   if (error) return internalError(error.message)
+
+  await logAuditEvent('order_viewed', { orderId, userId: user.id })
 
   return { ok: true, data: undefined }
 }

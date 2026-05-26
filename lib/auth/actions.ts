@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { checkRateLimit, recordFailure, resetOnSuccess } from '@/lib/auth/rate-limit'
+import { logAuditEvent } from '@/lib/audit/log-event'
 import type { UserRole } from '@/lib/types'
 
 export async function loginAction(_prevState: unknown, formData: FormData) {
@@ -25,6 +26,7 @@ export async function loginAction(_prevState: unknown, formData: FormData) {
 
   if (error) {
     recordFailure(ip)
+    await logAuditEvent('login_failed', { email })
     return { error: 'Credenciais inválidas. Verifique e-mail e senha.' }
   }
 
@@ -46,11 +48,16 @@ export async function loginAction(_prevState: unknown, formData: FormData) {
     .single()
 
   const role: UserRole = profile?.role ?? 'customer'
+  await logAuditEvent('login_success', { userId: user.id, email })
   redirect(role === 'admin' ? '/admin' : '/brands')
 }
 
 export async function logoutAction() {
   const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  await logAuditEvent('logout', { userId: user?.id ?? null })
   await supabase.auth.signOut()
   redirect('/login')
 }

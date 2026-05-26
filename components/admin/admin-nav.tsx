@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { label: 'Pedidos', href: '/admin/orders' },
   { label: 'Clientes', href: '/admin/customers' },
   { label: 'Configurações', href: '/admin/settings' },
+  { label: 'Auditoria', href: '/admin/audit' },
 ] as const
 
 export function AdminNav() {

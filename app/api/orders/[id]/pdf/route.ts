@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleSupabaseClient } from '@/lib/supabase/admin'
 import { getOrder } from '@/lib/orders/actions'
 import { renderOrderPdfBuffer } from '@/lib/pdf/order-pdf'
+import { logAuditEvent } from '@/lib/audit/log-event'
 
 export async function GET(
   _req: Request,
@@ -81,7 +82,9 @@ export async function GET(
     return NextResponse.json({ error: 'Erro ao gerar URL de download' }, { status: 500 })
   }
 
-  // 6. Redirect to signed URL with Content-Disposition hint
+  // 6. Log audit event and redirect to signed URL
+  await logAuditEvent('pdf_downloaded', { orderId: id, userId: user.id })
+
   return NextResponse.redirect(signedData.signedUrl, {
     status: 302,
     headers: {

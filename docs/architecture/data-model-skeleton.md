@@ -254,7 +254,53 @@ Itens de linha de um carrinho. Snapshot de preço capturado no momento da adiç�
 
 ---
 
+---
+
+## audit_logs
+
+Registro imutável de eventos críticos do sistema. Inserções via service_role server-side; leitura restrita a admins via RLS.
+
+| Coluna | Tipo | Nullable | Default | Descrição |
+|--------|------|----------|---------|-----------|
+| id | BIGSERIAL | NO | — | PK sequencial |
+| user_id | UUID | YES | NULL | FK → users_profile(id) ON DELETE SET NULL. NULL para eventos pré-autenticação (ex: login_failed) |
+| event_type | TEXT | NO | — | Tipo do evento (ex: `login_success`, `order_viewed`) |
+| target_resource_type | TEXT | YES | NULL | Tipo do recurso afetado (ex: `order`, `brand`) |
+| target_resource_id | TEXT | YES | NULL | ID do recurso afetado |
+| payload | JSONB | NO | '{}'::jsonb | Dados contextuais do evento |
+| ip_address | INET | YES | NULL | IP do cliente extraído de x-forwarded-for / x-real-ip |
+| user_agent | TEXT | YES | NULL | User-Agent do cliente |
+| created_at | TIMESTAMPTZ | NO | now() | Timestamp imutável do evento |
+
+**Índices:**
+- `idx_audit_user_created ON audit_logs(user_id, created_at DESC)`
+- `idx_audit_event_created ON audit_logs(event_type, created_at DESC)`
+
+**RLS Policies:**
+| Policy | Operação | Condição |
+|--------|----------|----------|
+| audit_admin_read | SELECT | `EXISTS (SELECT 1 FROM users_profile WHERE id = auth.uid() AND role = 'admin')` |
+
+> Nenhuma policy de INSERT user-facing. Inserts são feitos exclusivamente via `createServiceRoleSupabaseClient()` em Server Actions.
+
+**Eventos instrumentados:**
+`login_success`, `login_failed`, `logout`, `brand_published`, `brand_unpublished`, `order_submitted`, `order_viewed`, `pdf_downloaded`, `customer_invited`, `customer_brand_granted`, `customer_brand_revoked`, `customer_deactivated`, `openrouter_key_updated`
+
+**Retenção (NFR16):**
+MVP: logs permanentes (sem purge automático). Phase 2: implementar pg_cron:
+```sql
+SELECT cron.schedule('audit-purge', '0 3 * * *',
+  $$DELETE FROM audit_logs WHERE created_at < now() - interval '90 days'$$);
+```
+
+**Limitação documentada:** Eventos `extraction_started/completed/failed` são disparados pela Edge Function Deno e precisam ser logados diretamente no contexto Deno — fora do escopo do helper Node.js `logAuditEvent`.
+
+**Relacionamentos:**
+- N:1 com `users_profile` (user_id, nullable)
+
+---
+
 ## Tabelas de Epics Futuros (não incluídas nesta story)
 
-> As tabelas abaixo pertencem aos Epics 4-5 e serão criadas em stories futuras:
-> `orders`, `order_items`, `audit_logs`, `consent_log`, `deletion_requests`
+> As tabelas abaixo pertencem aos Epics futuros e serão criadas em stories futuras:
+> `consent_log`, `deletion_requests`
