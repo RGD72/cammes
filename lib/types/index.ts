@@ -68,6 +68,7 @@ export interface UserProfile {
   email: string
   phone: string | null
   is_active: boolean
+  terms_accepted_at: string | null
   created_at: string
   updated_at: string
 }

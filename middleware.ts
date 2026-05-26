@@ -2,16 +2,19 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 import type { UserRole } from '@/lib/types'
 
-async function getRole(
+async function getProfile(
   supabase: Awaited<ReturnType<typeof updateSession>>['supabase'],
   userId: string,
-): Promise<UserRole> {
+): Promise<{ role: UserRole; terms_accepted_at: string | null }> {
   const { data } = await supabase
     .from('users_profile')
-    .select('role')
+    .select('role, terms_accepted_at')
     .eq('id', userId)
     .single()
-  return (data?.role as UserRole) ?? 'customer'
+  return {
+    role: (data?.role as UserRole) ?? 'customer',
+    terms_accepted_at: data?.terms_accepted_at ?? null,
+  }
 }
 
 export async function middleware(request: NextRequest) {
@@ -24,9 +27,15 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
+  // /invite/accept — requer sessão ativa mas não verifica terms (é onde o cliente aceita)
+  if (pathname.startsWith('/invite/')) {
+    if (!user) return NextResponse.redirect(new URL('/login', request.url))
+    return supabaseResponse
+  }
+
   if (pathname.startsWith('/login')) {
     if (user) {
-      const role = await getRole(supabase, user.id)
+      const { role } = await getProfile(supabase, user.id)
       return NextResponse.redirect(
         new URL(role === 'admin' ? '/admin' : '/brands', request.url),
       )
@@ -38,7 +47,7 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
-    const role = await getRole(supabase, user.id)
+    const { role } = await getProfile(supabase, user.id)
     if (role !== 'admin') {
       return NextResponse.redirect(new URL('/brands', request.url))
     }
@@ -53,9 +62,13 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
-    const role = await getRole(supabase, user.id)
+    const { role, terms_accepted_at } = await getProfile(supabase, user.id)
     if (role === 'admin') {
       return NextResponse.redirect(new URL('/admin', request.url))
+    }
+    // Customer sem aceite de termos → fluxo de onboarding
+    if (!terms_accepted_at) {
+      return NextResponse.redirect(new URL('/invite/accept', request.url))
     }
     return supabaseResponse
   }
