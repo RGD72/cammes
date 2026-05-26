@@ -1,0 +1,125 @@
+storyId: '5.2'
+title: Exportação de Pedidos em CSV
+verdict: PASS
+date: '2026-05-25'
+reviewer: '@qa (Quinn)'
+
+# ─── Acceptance Criteria ────────────────────────────────────────────────────
+acceptance_criteria:
+  - id: AC1
+    description: Botão "Exportar CSV" em /admin/orders/{id} gera download com 8 colunas obrigatórias
+    status: PASS
+    evidence: |
+      app/admin/orders/[id]/page.tsx — botão disabled substituído por <a href={`/api/orders/${id}/csv`}>.
+      app/api/orders/[id]/csv/route.ts — gera CSV via generateCsv(items.map(...)). Header em
+      generate-csv.ts contém exatamente as 8 colunas: Referência;Descrição;Cor;Tamanho;Qtd;
+      Nome do Cliente;Valor da Peça;Valor Total.
+
+  - id: AC2
+    description: Botão "Exportar lista" respeita filtros e limita a 1000 linhas
+    status: PASS
+    evidence: |
+      app/admin/orders/page.tsx — buildCsvUrl(filters) serializa todos os 5 filtros nos
+      query params; link "Exportar lista" aponta para /api/admin/orders/csv?{filtros}.
+      getAdminOrdersForCsv aplica brandId, customerName, dateFrom, dateTo, status com .limit(1000).
+      X-Truncated: true setado quando orders.length === 1000. Teste P-CSV-4 valida .limit(1000).
+
+  - id: AC3
+    description: UTF-8 BOM + separador ';' + decimal ',' (pt-BR)
+    status: PASS
+    evidence: |
+      lib/csv/generate-csv.ts: const BOM = '﻿' (U+FEFF), cells.join(';'),
+      formatDecimal: n.toFixed(2).replace('.', ','), linhas separadas com \r\n.
+      Testes P-CSV-1 (BOM+header+;) e P-CSV-2 (decimal ,) confirmam formato.
+
+  - id: AC4
+    description: Filename pedido-{order_number}-{YYYY-MM-DD}.csv (individual) ou pedidos-{YYYY-MM-DD}.csv (lista)
+    status: PASS
+    evidence: |
+      Individual: date = order.submitted_at.slice(0, 10) →
+        filename = `pedido-${order.order_number}-${date}.csv`
+      Lista: date = new Date().toISOString().slice(0, 10) →
+        filename = `pedidos-${date}.csv`
+      Ambos os padrões correspondem exatamente ao AC.
+
+  - id: AC5
+    description: Ambas as rotas exigem autenticação — sem auth retorna 403
+    status: PASS
+    evidence: |
+      Individual (/api/orders/[id]/csv): auth guard explícito — se !user retorna
+        new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403 }).
+      Lista (/api/admin/orders/csv): auth delegado para getAdminOrdersForCsv que retorna
+        permissionDenied() → route mapeia PERMISSION_DENIED para status 403.
+      Teste N-CSV-1 valida getAdminOrdersForCsv retorna PERMISSION_DENIED com user null.
+
+# ─── 7 Quality Checks ────────────────────────────────────────────────────────
+quality_checks:
+  - check: code_review
+    status: PASS
+    notes: |
+      Código limpo e idiomático. generate-csv.ts é pura função sem side-effects.
+      Two-query approach em getAdminOrdersForCsv resolve SF-002 (PostgREST JOIN ambiguity)
+      com elegância. escapeCell cobre os casos RFC 4180 necessários (;, ", \n).
+      Route handlers seguem exatamente o padrão do PDF route existente. Sem magic strings
+      soltas — CSV_ORDER_LIMIT e CSV_HEADER como constantes nomeadas.
+
+  - check: unit_tests
+    status: PASS
+    notes: |
+      8 novos testes, 150/150 totais passando. Cobertura completa do test matrix:
+      P-CSV-1 (BOM+header+;), P-CSV-2 (decimal ,), P-CSV-3 (null→empty), P-CSV-4
+      (limit 1000), N-CSV-1 (PERMISSION_DENIED), escape semicolon, empty rows,
+      enrichment (order_number+submitted_at). Thenable mock builder é sólido.
+
+  - check: acceptance_criteria
+    status: PASS
+    notes: Todos os 5 ACs com evidência direta no código e nos testes.
+
+  - check: no_regressions
+    status: PASS
+    notes: |
+      26 test files, 150 testes — todos passando. Lint: ✅. Typecheck: ✅.
+      Mudanças em admin-actions.ts são puramente aditivas (nova função, novo tipo).
+      Mudanças nas páginas substituem disabled button por link funcional — non-breaking.
+
+  - check: performance
+    status: PASS
+    notes: |
+      CSV individual: dois round-trips existentes via getOrder() (já otimizado, Story 5.1).
+      CSV lista: duas queries sequenciais com .limit(1000); N queries de ORDER_ITEMS
+      por IN clause — eficiente para o volume MVP. X-Truncated header sinaliza cap ao cliente.
+      Sem N+1 queries — uma IN query busca todos os items de até 1000 pedidos de uma vez.
+
+  - check: security
+    status: PASS
+    notes: |
+      Auth guard em ambas as rotas via createServerSupabaseClient() + getUser().
+      Nunca usa service role key. Filtros passados via query params passam pelas mesmas
+      validações que o painel de pedidos. Sem SQL injection risk — Supabase ORM param binding.
+      CORS/route exposure: rotas sob /api/ — mesmas proteções do Next.js.
+
+  - check: documentation
+    status: PASS
+    notes: |
+      Story 5.2 Change Log atualizado (versões 1.0–1.3). Dev Notes completos com SF-002
+      resolution documentada. Definition of Done checklist completo.
+
+# ─── Issues ──────────────────────────────────────────────────────────────────
+issues:
+  - severity: low
+    category: ux
+    description: Nenhum feedback visual ao usuário quando a lista está truncada (X-Truncated presente no header HTTP mas não surfaceado na UI)
+    recommendation: Future story — adicionar toast/banner "Exportação limitada a 1000 linhas" via JS ao interceptar o header
+
+  - severity: low
+    category: code
+    description: Story frontmatter tem status 'Draft' (não atualizado para InReview) — o campo Status inline está correto
+    recommendation: Normalizar frontmatter; não bloqueia gate
+
+# ─── Summary ─────────────────────────────────────────────────────────────────
+summary: |
+  Story 5.2 entrega exportação CSV completa para o painel admin: rota individual e lista
+  filtrada. Implementação limpa, sem dependências externas, com pure function para geração
+  de CSV. Todos os 5 ACs verificados com evidência direta. 150/150 testes passando.
+  Lint e typecheck limpos. Dois LOW concerns documentados — ambos não-bloqueantes.
+  Aprovado para @devops *push.
