@@ -1,0 +1,85 @@
+schema: 1
+story: '5.1'
+gate: PASS
+status_reason: >
+  Todos os 7 ACs verificados e implementados corretamente. Auth guard presente em ambas as
+  Server Actions, RLS conforme AC6 (sem filtro explícito admin_user_id), Server Action inline
+  com redirect() para mark-as-viewed. 142 testes passando (24 arquivos; 5 novos).
+  Quatro observações de baixa severidade documentadas como débito técnico sem impacto funcional.
+reviewer: Quinn
+updated: '2026-05-25T21:35:00Z'
+
+top_issues:
+  - id: CONCERN-001
+    severity: low
+    finding: >
+      Links "Ver" (orders/page.tsx:102) e paginação "Anterior"/"Próxima" usam <a href> em vez
+      de <Link> do Next.js. Lint não flagrou (rotas dinâmicas). Funcional, mas perde prefetch
+      e client-side navigation.
+    suggested_action: >
+      Em revisão futura, converter <a href={`/admin/orders/${row.id}`}> e links de paginação
+      para <Link href={...}> do next/link.
+
+  - id: CONCERN-002
+    severity: low
+    finding: >
+      formatDate() duplicada em orders/page.tsx:9-13 e orders/[id]/page.tsx:7-11.
+      Código idêntico nos dois arquivos.
+    suggested_action: >
+      Extrair para lib/utils/format-date.ts e importar nos dois files.
+
+  - id: CONCERN-003
+    severity: low
+    finding: >
+      handleMarkViewed (orders/[id]/page.tsx:32-36) silencia erro de markOrderViewed
+      e sempre chama redirect(). Se DB update falhar, usuário retorna à mesma
+      página sem feedback de erro.
+    suggested_action: >
+      Para MVP admin (erros raros, admin já autenticado) é aceitável. Em revisão futura,
+      capturar result.ok e mostrar toast de erro antes do redirect.
+
+  - id: CONCERN-004
+    severity: low
+    finding: >
+      markOrderViewed usa apenas .eq('id', orderId) sem double-check .eq('admin_user_id', user.id)
+      além do RLS. Diferente do padrão usado em markNotificationRead (Story 4.6).
+      Story AC6 explicitamente permite, mas gera inconsistência de padrão.
+    suggested_action: >
+      Em padronização futura, decidir se todas as mutations seguem o padrão defense-in-depth
+      de Story 4.6 ou se confiam exclusivamente no RLS (ambas as abordagens são corretas).
+
+waiver:
+  active: false
+
+validation_evidence:
+  lint: PASS — 0 erros
+  typecheck: PASS — 0 erros TypeScript
+  tests: PASS — 142/142 (24 test files; 5 novos: P-ADM-1, P-ADM-2, P-ADM-3, P-ADM-4, N-ADM-1)
+  build: NOT_RUN — typecheck cobre tipos; sem alteração de infra
+
+ac_traceability:
+  AC1: PASS — getAdminOrders com .order('submitted_at', {ascending:false}); page.tsx com 6 colunas
+       (Data, Marca, Cliente, Total BRL, Status badge, link Ver); auth guard if (!user)
+  AC2: PASS — OrderFilters 'use client' com form method=GET action=/admin/orders; 5 filtros
+       condicionais (brandId→eq, customerName→ilike, dateFrom→gte, dateTo→lte+T23:59:59Z,
+       status→eq); defaultValue preserva estado; Limpar → Link /admin/orders
+  AC3: PASS — PAGE_SIZE=25; range((p-1)*25, p*25-1) com count:exact; page=Math.max(1,Number(params.page??1));
+       hasPrev/hasNext; buildPageUrl preserva filtros; "Pedido {from}–{to} de {total} total"
+  AC4: PASS — getOrder() reaproveitado de lib/orders/actions.ts:244; header order_number/data/marca/cliente/total;
+       tabela 8 colunas conforme spec; <a href=/api/orders/{id}/pdf> Baixar PDF;
+       button disabled "Exportar CSV (em breve)"
+  AC5: PASS — handleMarkViewed inline 'use server' → markOrderViewed(id) → redirect; status===received
+       mostra form+button "Marcar como visto"; status===viewed mostra badge verde "Visto" + viewed_at
+  AC6: PASS — createServerSupabaseClient() em getAdminOrders e markOrderViewed; sem filtro admin_user_id
+       explícito; auth guard if (!user) return permissionDenied()
+  AC7: PASS — 5 testes: P-ADM-1 (brand_name JOIN), P-ADM-2 (filtro status), P-ADM-3 (OFFSET 25 page=2),
+       P-ADM-4 (UPDATE viewed+viewed_at), N-ADM-1 (PERMISSION_DENIED unauthenticated)
+
+security_review:
+  auth_guard_getAdminOrders: PASS — linha 50 admin-actions.ts
+  auth_guard_markOrderViewed: PASS — linha 82 admin-actions.ts
+  server_client_usage: PASS — createServerSupabaseClient() em todas as funções (não service role)
+  rls_isolation: PASS — orders_admin_own_brand FOR ALL; sem bypass de RLS
+  inline_server_action: PASS — handleMarkViewed chama markOrderViewed que tem auth guard próprio
+  sql_injection: PASS — Supabase ORM exclusivo; nenhuma query raw
+  data_exposure: PASS — nenhum dado sensível retornado ao client
