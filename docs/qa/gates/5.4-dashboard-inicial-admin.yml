@@ -1,0 +1,36 @@
+schema: 1
+story: '5.4'
+gate: PASS
+status_reason: >
+  Todos os 5 ACs implementados e verificados. RLS enforçado via session client,
+  cache 60s com tag e invalidação funcional, recharts lazy-loaded dentro do budget
+  de bundle (107KB < 120KB). 161/161 testes passando.
+reviewer: Quinn
+updated: '2026-05-26T09:35:00Z'
+top_issues:
+  - id: 'MNT-001'
+    severity: low
+    finding: >
+      adminId aceito como parâmetro nas 3 funções públicas exportadas. Embora todos
+      os callers atuais derivem adminId de user.id (auth.getUser()), o padrão é
+      levemente aberto para misuse futuro.
+    suggested_action: >
+      Considerar refatorar para derivar adminId internamente via createServerSupabaseClient()
+      nas funções privadas fetch*, eliminando o parâmetro público. Aceitável para MVP.
+  - id: 'PERF-001'
+    severity: low
+    finding: >
+      Tabela brands consultada separadamente em fetchAdminDashboardKpis,
+      fetchRecentOrders e fetchRecentExtractionJobs — 3 queries por cache miss.
+    suggested_action: >
+      Considerar consolidar em uma única função que retorna todos os dados ou
+      compartilhar brandIds entre as queries. Mitigado pelo cache 60s.
+  - id: 'TEST-001'
+    severity: low
+    finding: >
+      Lógica de agregação ordersByDay (agrupamento por YYYY-MM-DD) verificada
+      apenas como Array.isArray() — conteúdo específico não assertado no P-DASH-1.
+    suggested_action: >
+      Adicionar assertions para ordersByDay[0].date e ordersByDay[0].count em P-DASH-1
+      para garantir a lógica de agrupamento. Pode ser feito na Story 5.8 ou próxima iteração.
+waiver: { active: false }
