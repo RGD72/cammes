@@ -74,14 +74,12 @@ export default async function AdminOrderDetailPage({
             Baixar PDF
           </a>
 
-          <button
-            type="button"
-            disabled
-            className="rounded border px-3 py-1.5 text-sm text-foreground/40 cursor-not-allowed"
-            title="Em breve"
+          <a
+            href={`/api/orders/${id}/csv`}
+            className="rounded border px-3 py-1.5 text-sm hover:bg-muted transition-colors"
           >
-            Exportar CSV (em breve)
-          </button>
+            Exportar CSV
+          </a>
         </div>
       </div>
 

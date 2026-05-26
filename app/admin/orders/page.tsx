@@ -23,6 +23,17 @@ function buildPageUrl(filters: AdminOrderFilters, p: number): string {
   return `/admin/orders?${sp.toString()}`
 }
 
+function buildCsvUrl(filters: AdminOrderFilters): string {
+  const sp = new URLSearchParams()
+  if (filters.brandId) sp.set('brand', filters.brandId)
+  if (filters.customerName) sp.set('customer', filters.customerName)
+  if (filters.dateFrom) sp.set('dateFrom', filters.dateFrom)
+  if (filters.dateTo) sp.set('dateTo', filters.dateTo)
+  if (filters.status) sp.set('status', filters.status)
+  const qs = sp.toString()
+  return `/api/admin/orders/csv${qs ? `?${qs}` : ''}`
+}
+
 export default async function AdminOrdersPage({
   searchParams,
 }: {
@@ -113,9 +124,17 @@ export default async function AdminOrdersPage({
           </div>
 
           <div className="mt-4 flex items-center justify-between text-sm text-foreground/70">
-            <span>
-              Pedido {from}–{to} de {total} total
-            </span>
+            <div className="flex items-center gap-4">
+              <span>
+                Pedido {from}–{to} de {total} total
+              </span>
+              <a
+                href={buildCsvUrl(filters)}
+                className="rounded border px-3 py-1 hover:bg-muted transition-colors text-foreground/80"
+              >
+                Exportar lista
+              </a>
+            </div>
             <div className="flex gap-2">
               {hasPrev && (
                 <a
