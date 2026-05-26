@@ -1,6 +1,7 @@
 'use server'
 
 import { z } from 'zod'
+import { revalidateTag } from 'next/cache'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleSupabaseClient } from '@/lib/supabase/admin'
 import { logAuditEvent } from '@/lib/audit/log-event'
@@ -231,6 +232,11 @@ export async function submitOrder(
 
   // 13. Audit log
   await logAuditEvent('order_submitted', { order_id: order.id, brand_id: brandId })
+
+  // Invalidate admin dashboard KPI cache
+  if (brand.owner_admin_id) {
+    revalidateTag(`kpis:admin:${brand.owner_admin_id}`)
+  }
 
   return {
     ok: true,

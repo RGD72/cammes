@@ -8,6 +8,11 @@ vi.mock('@/lib/audit/log-event', () => ({
   logAuditEvent: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('next/cache', () => ({
+  revalidateTag: vi.fn(),
+  unstable_cache: vi.fn((fn: () => unknown) => fn),
+}))
+
 import { toggleBrandPublished } from '@/lib/brands/actions'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 

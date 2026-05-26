@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidateTag } from 'next/cache'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { logAuditEvent } from '@/lib/audit/log-event'
 
@@ -191,6 +192,8 @@ export async function toggleBrandPublished(
     brandId,
     adminId: user.id,
   })
+
+  revalidateTag(`kpis:admin:${user.id}`)
 
   return { brand: brand as Brand, error: null }
 }
