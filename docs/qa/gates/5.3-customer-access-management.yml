@@ -1,0 +1,178 @@
+storyId: '5.3'
+title: Gestão de Acessos — Convidar Cliente e Atribuir Marcas
+verdict: PASS
+date: '2026-05-26'
+reviewer: '@qa (Quinn)'
+
+# ─── Acceptance Criteria ────────────────────────────────────────────────────
+acceptance_criteria:
+  - id: AC1
+    description: /admin/customers lista clientes do tenant com nome, e-mail, marcas, último login. Apenas clientes cujas marcas pertencem ao admin logado.
+    status: PASS
+    evidence: |
+      listAdminCustomers() usa 3 queries: brands (RLS filtra por owner_admin_id automaticamente) →
+      user_brand_access (.in(brandIds)) → users_profile (.in(customerIds)).
+      auth.admin.listUsers({ perPage: 1000 }) fornece last_sign_in_at.
+      app/admin/customers/page.tsx: tabela com Nome, E-mail, Marcas (badges), Último login,
+      Status (Ativo/Inativo/Convite pendente), link "Ver".
+      Isolamento multi-tenant garantido por RLS + query structure.
+
+  - id: AC2
+    description: Botão "Convidar cliente" abre modal com e-mail, nome, multi-select de marcas. Submissão envia convite via auth.admin.inviteUserByEmail.
+    status: PASS
+    evidence: |
+      InviteCustomerModal: campos email (type=email, required), fullName (required),
+      checkbox list de marcas. startTransition + inviteCustomer() server action.
+      Feedback inline: "E-mail já cadastrado" em conflito, mensagem genérica em outros erros.
+      Fecha modal + router.refresh() após sucesso.
+      inviteCustomer() chama adminClient.auth.admin.inviteUserByEmail(email, { data, redirectTo }).
+      Teste P-CUST-2 confirma email e redirectTo corretos.
+
+  - id: AC3
+    description: /invite/accept define senha + aceita LGPD. Grava terms_accepted_at em users_profile.
+    status: PASS
+    evidence: |
+      app/invite/accept/page.tsx: Server Component com auth guard (redirect /login se !user).
+      accept-invite-form.tsx: campo password (required, minLength=8) + checkbox LGPD (required).
+      Submit: supabase.auth.updateUser({ password }) → acceptInviteTerms() server action.
+      acceptInviteTerms(): UPDATE users_profile SET terms_accepted_at = now() WHERE id = user.id.
+      middleware.ts: customer sem terms_accepted_at em /brands|/cart|/orders → redirect /invite/accept.
+      /invite/* excluído do check de terms para evitar loop infinito.
+
+  - id: AC4
+    description: /admin/customers/[id] adiciona/remove marcas. Remoção seta revoked_at=now(). Adição reabre ou insere.
+    status: PASS
+    evidence: |
+      CustomerBrandManager: lista marcas ativas com botão "Remover" + select para adicionar.
+      grantBrandAccess(): .upsert({ user_id, brand_id, granted_at, granted_by, revoked_at: null },
+        { onConflict: 'user_id,brand_id' }) — reabre registros revogados (SF-002).
+      revokeBrandAccess(): UPDATE SET revoked_at = now() (não DELETE).
+      RLS uba_admin_manage garante que só o dono da marca pode gerenciar acessos.
+      Teste P-CUST-3 valida granted_by = auth.uid() + revoked_at: null no upsert.
+      Teste P-CUST-4 valida revoked_at como string sem chamar delete.
+
+  - id: AC5
+    description: Botão "Desativar cliente" seta is_active=false sem deletar usuário ou pedidos.
+    status: PASS
+    evidence: |
+      deactivateCustomer(): UPDATE users_profile SET is_active=false WHERE id=customerId AND role='customer'.
+      Inline Server Action no page.tsx chama deactivateCustomer() + redirect.
+      Botão exibido apenas quando profile.is_active=true (oculto após desativação).
+      RLS policy users_profile_admin_update_customers (migration 20260525000002) permite
+      o update via createServerSupabaseClient().
+      Teste P-CUST-5 confirma UPDATE com { is_active: false }, nenhum DELETE chamado.
+
+  - id: AC6
+    description: logAuditEvent() chamado para customer_invited, customer_brand_granted, customer_brand_revoked, customer_deactivated.
+    status: PASS
+    evidence: |
+      inviteCustomer(): logAuditEvent('customer_invited', { email, brandIds, invitedBy })
+      grantBrandAccess(): logAuditEvent('customer_brand_granted', { customerId, brandId, grantedBy })
+      revokeBrandAccess(): logAuditEvent('customer_brand_revoked', { customerId, brandId, revokedBy })
+      deactivateCustomer(): logAuditEvent('customer_deactivated', { customerId, deactivatedBy })
+      Todos os 4 eventos AC6 cobertos. logAuditEvent é stub (console.log) — implementação Story 5.5.
+
+# ─── 7 Quality Checks ────────────────────────────────────────────────────────
+quality_checks:
+  - check: code_review
+    status: PASS
+    notes: |
+      Código limpo e consistente com padrões existentes. 'use server' em actions.ts.
+      Funções utilitárias permissionDenied/internalError/conflictError seguem padrão de orders/actions.ts.
+      IDS REUSE aplicado: lib/supabase/admin.ts existente reutilizado sem modificação.
+      3-query approach em listAdminCustomers resolve PostgREST join ambiguity (mesmo padrão SF-002 de 5.2).
+      grantBrandAccess usa upsert com onConflict para reabertura limpa de acesso revogado.
+      inviteCustomer usa adminClient para criar users_profile (correto — invited user não tem session).
+      Middleware refatorado para getProfile() recupera role + terms_accepted_at em uma única query.
+      Sem magic strings, sem dependências externas adicionadas.
+
+  - check: unit_tests
+    status: PASS
+    notes: |
+      11 novos testes, 161/161 totais passando. Test matrix completa:
+      P-CUST-1 (listAdminCustomers multi-tenant isolation + last_sign_in_at),
+      P-CUST-2 (inviteUserByEmail email + redirectTo), P-CUST-3 (grantBrandAccess upsert + granted_by),
+      P-CUST-4 (revokeBrandAccess update, não delete), P-CUST-5 (deactivateCustomer is_active=false),
+      N-CUST-1 (6 actions × PERMISSION_DENIED quando user=null).
+      Padrão makeChain thenable sólido, consistente com outros test files.
+
+  - check: acceptance_criteria
+    status: PASS
+    notes: Todos os 6 ACs com evidência direta no código e nos testes.
+
+  - check: no_regressions
+    status: PASS
+    notes: |
+      161/161 testes passando. Lint ✅. Typecheck ✅.
+      middleware.ts: getProfile() substitui getRole() — comportamento preservado para /admin e /login.
+      /brands, /cart, /orders: nova verificação terms_accepted_at aditiva (customers existentes
+      sem terms_accepted_at já seriam bloqueados — comportamento correto por design).
+      admin-nav.tsx: item "Clientes" puramente aditivo.
+      UserProfile type: terms_accepted_at: string | null backward-compatible.
+      Migration 20260525000002: ADD COLUMN IF NOT EXISTS + CREATE POLICY — sem risco de dados.
+
+  - check: performance
+    status: PASS
+    notes: |
+      listAdminCustomers: 4 queries sequenciais. listUsers({ perPage: 1000 }) adequado para MVP
+      (<100 clientes esperados). Story Dev Notes documenta limitação explicitamente.
+      Sem N+1 queries — user_brand_access usa .in(brandIds) para todos acessos de uma vez.
+      inviteCustomer: 2 queries (upsert profile + insert accesses) + 1 auth API call — aceitável
+      para operação administrativa de baixa frequência.
+
+  - check: security
+    status: PASS
+    notes: |
+      SUPABASE_SERVICE_ROLE_KEY: sem prefixo NEXT_PUBLIC_, usado apenas em Server Actions ('use server').
+      createServiceRoleSupabaseClient() nunca importado em Client Components.
+      Auth guard em todas as 6 actions: if (!user) return permissionDenied().
+      Multi-tenant isolation: brands query via RLS (owner_admin_id = auth.uid() automático).
+      grantBrandAccess/revokeBrandAccess: RLS uba_admin_manage bloqueia cross-tenant manipulation.
+      deactivateCustomer: .eq('role', 'customer') previne admin auto-desativação acidental.
+      /invite/accept: usuário já autenticado (middleware redireciona para /login se !user).
+      Sem exposição de dados de auth.admin.listUsers() para o cliente — apenas server-side.
+
+  - check: documentation
+    status: PASS
+    notes: |
+      Story 5.3 Change Log atualizado (versões 1.0–1.3). Dev Agent Record completo com decisions,
+      files created/modified. Definition of Done 100% checkboxes marcados.
+      Comentários inline explicativos nas decisões não-óbvias (UPSERT, RLS bypass, terms check).
+
+# ─── Issues ──────────────────────────────────────────────────────────────────
+issues:
+  - severity: low
+    category: code
+    description: |
+      users_profile_admin_update_customers policy usa EXISTS (SELECT 1 FROM users_profile a WHERE ...)
+      em vez do padrão estabelecido public.current_user_is_admin() (SECURITY DEFINER).
+      Funcionalmente correto dado estado atual das SELECT policies (já corrigidas em Story 1.6),
+      mas inconsistente com a convenção do codebase.
+    recommendation: |
+      Future migration: substituir por public.current_user_is_admin() para consistência
+      e resiliência contra futuras mudanças em SELECT policies.
+
+  - severity: low
+    category: ux
+    description: |
+      Botão "Desativar cliente" não possui dialog de confirmação — ação é imediata ao submit do form.
+      Desativação é reversível (is_active pode ser setado de volta manualmente no DB), mas sem
+      feedback visual de undo na UI.
+    recommendation: |
+      Future story: adicionar confirmation dialog/modal antes de desativar.
+
+  - severity: low
+    category: code
+    description: |
+      Story frontmatter tem status 'Draft' (não atualizado para InReview/Done).
+      Campo Status inline está correto (InReview). Mesmo padrão observado em Story 5.2.
+    recommendation: Normalizar frontmatter; não bloqueia gate.
+
+# ─── Summary ─────────────────────────────────────────────────────────────────
+summary: |
+  Story 5.3 entrega o ciclo completo de gestão de acessos: convite por e-mail, atribuição de marcas,
+  aceite de termos LGPD, e desativação de clientes. Implementação limpa e consistente com o padrão
+  do projeto. Todos os 6 ACs verificados com evidência direta. 161/161 testes passando.
+  Lint e typecheck limpos. Isolamento multi-tenant via RLS validado. Service role key
+  corretamente confinado ao server-side. Três concerns LOW documentados — nenhum bloqueante.
+  Aprovado para @devops *push.
