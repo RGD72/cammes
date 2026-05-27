@@ -1,0 +1,71 @@
+schema: 1
+story: '5.5'
+gate: CONCERNS
+status_reason: >
+  Todos os 5 ACs atendidos, testes passando (165 total, 4 novos), build limpo.
+  Duas concerns não-bloqueantes de qualidade documentadas abaixo para follow-up.
+reviewer: Quinn
+updated: '2026-05-26T13:30:00Z'
+
+top_issues:
+  - id: 'PERF-001'
+    severity: medium
+    finding: >
+      getDistinctEventTypes() executa SELECT event_type sem LIMIT e sem DISTINCT no banco.
+      Deduplicação acontece em JS, carregando potencialmente todos os logs para popular um dropdown.
+      Com alto volume de registros (>100k logs), isso pode ser lento.
+    suggested_action: >
+      Usar query nativa com DISTINCT: criar RPC Postgres ou substituir por
+      SELECT DISTINCT event_type FROM audit_logs ORDER BY event_type.
+      Alternativa imediata: adicionar .limit(5000) como teto.
+
+  - id: 'SEC-001'
+    severity: medium
+    finding: >
+      getAuditLogs(), getAuditLogsForCsv() e getDistinctEventTypes() verificam apenas !user (autenticado),
+      sem verificar explicitamente se role = 'admin' na camada de aplicação.
+      A defesa principal é a RLS (audit_admin_read), mas não há fallback de defense-in-depth.
+      Se RLS for desabilitada acidentalmente (ex: bug de migration), qualquer usuário autenticado
+      leria todos os logs de auditoria via /api/admin/audit/csv.
+    suggested_action: >
+      Adicionar verificação explícita de role admin nas funções de leitura de audit_logs,
+      similar ao padrão usado em lib/orders/admin-actions.ts com permissionDenied().
+      Consultar users_profile.role após getUser() e retornar permissionDenied() se role != 'admin'.
+
+waiver:
+  active: false
+
+traceability:
+  AC1: PASS — Migration completa com DDL, índices, RLS e policy audit_admin_read
+  AC2: PASS — logAuditEvent real com service_role, 8 callers existentes + 3 novos (login_success/failed/logout) + order_viewed + pdf_downloaded
+  AC3: PASS — RLS habilitado, sem policy INSERT user-facing, inserts via service_role
+  AC4: PASS — /admin/audit com filtros, paginação, badges coloridos, CSV export via /api/admin/audit/csv
+  AC5: PASS — pg_cron Phase 2 documentado na migration e em data-model-skeleton.md
+
+test_coverage:
+  unit:
+    - P-AUDIT-1: insert com event_type, user_id, payload corretos — PASS
+    - P-AUDIT-2: ip_address e user_agent extraídos dos headers — PASS
+    - N-AUDIT-1: sem throw quando insert retorna erro — PASS
+    - N-AUDIT-2: fallback null quando headers() lança — PASS
+  total_tests: 165
+  new_tests: 4
+
+quality_gates_executed:
+  lint: PASS
+  typecheck: PASS (erros pré-existentes em CartTable.test.tsx, zero novos)
+  test: PASS (165/165)
+  build: PASS (/admin/audit e /api/admin/audit/csv compilados)
+
+security_assessment:
+  service_role_usage: CORRECT — apenas em lib/audit/log-event.ts (Server Action), nunca client-side
+  rls_coverage: ADEQUATE — audit_admin_read bloqueia SELECT para não-admins
+  payload_safety: ADEQUATE — callers existentes não logam senhas/chaves
+  ip_logging: ADEQUATE — x-forwarded-for com split(',')[0].trim() previne log de IPs múltiplos
+  concern: SEC-001 acima — defense-in-depth ausente nas funções de leitura
+
+architectural_notes: >
+  Escolha correta de usar URL link para CSV (consistência com orders/CSV pattern).
+  'use server' em log-event.ts é necessário para usar headers() do Next.js.
+  AuditEventType com (string & Record<never, never>) mantém extensibilidade sem perder type safety.
+  Padrão makeChain thenable consistente com dashboard-actions.test.ts.
