@@ -1,0 +1,51 @@
+schema: 1
+story: '5.6'
+gate: CONCERNS
+status_reason: 'Todos os 4 critérios de aceite estão satisfeitos e os quality gates passam (169/169 testes, lint, typecheck, build ✅). Dois itens não bloqueantes identificados: UPDATE silencioso em users_profile e ausência de testes em getConsentHistory().'
+reviewer: 'Quinn'
+updated: '2026-05-27T00:00:00Z'
+top_issues:
+  - id: 'REL-001'
+    severity: medium
+    finding: 'UPDATE users_profile.consented_version em recordConsent() não verifica o resultado — se falhar após INSERT bem-sucedido em consent_log, o usuário será redirecionado repetidamente para /consent/accept mesmo com aceite auditado.'
+    suggested_action: 'Checar resultado do UPDATE e retornar internalError() se falhar, ou ao menos logar o erro para diagnóstico.'
+  - id: 'TEST-001'
+    severity: low
+    finding: 'getConsentHistory() não possui testes unitários — função exportada e usável por componentes futuros, mas sem cobertura.'
+    suggested_action: 'Adicionar 2 testes: P-HIST-1 (retorna histórico do usuário autenticado), N-HIST-1 (retorna PERMISSION_DENIED quando não autenticado).'
+waiver: { active: false }
+
+# Rastreabilidade de Critérios de Aceite
+ac_traceability:
+  AC1:
+    status: PASS
+    evidence: 'AcceptInviteForm: checkbox name="terms" não pré-marcado, validação client-side com mensagem de erro, links /legal/terms e /legal/privacy com target="_blank".'
+  AC2:
+    status: PASS
+    evidence: 'recordConsent() insere user_id, document_version, ip_address em consent_log via service_role. accepted_at = DB DEFAULT now(). logAuditEvent("consent_accepted", { userId, documentVersion }) chamado.'
+  AC3:
+    status: PASS
+    evidence: 'app/legal/terms/page.tsx e app/legal/privacy/page.tsx: versão 1.0, data 2026-05-27. Seções LGPD cobertas (dados coletados, finalidade, base legal Art. 7º I+V, direitos Art. 18, DPO, retenção). Build: ○ (Static).'
+  AC4:
+    status: PASS
+    evidence: 'middleware.ts: consented_version !== CURRENT_DOCUMENT_VERSION → redirect /consent/accept. Novos usuários (null) → /invite/accept. ConsentForm sem campo de senha. Redireciona para /brands após aceite.'
+
+# Verificações de Segurança
+security_checks:
+  service_role_usage: PASS  # createServiceRoleSupabaseClient() apenas em Server Actions ('use server')
+  rls_coverage: PASS        # consent_log_self_read FOR SELECT USING (user_id = auth.uid()); sem INSERT RLS user-facing
+  auth_validation: PASS     # getUser() verificado antes de qualquer operação
+  ip_extraction: PASS       # Extraído server-side de x-forwarded-for, nunca do client
+  no_client_exposure: PASS  # SUPABASE_SERVICE_ROLE_KEY não exposto em Client Components
+
+# Quality Gates
+quality_gates:
+  lint: PASS
+  typecheck: PASS  # Zero erros novos; 2 pré-existentes em CartTable.test.tsx (Story 5.5)
+  tests: PASS      # 169/169 (4 novos testes de consent)
+  build: PASS      # /consent/accept Dynamic, /legal/* Static
+
+# Observações Carry-Forward de Story 5.5 (não relacionadas a esta story)
+carry_forward_55:
+  - PERF-001: getDistinctEventTypes() sem LIMIT
+  - SEC-001: role = 'admin' check explícito em funções de leitura de audit

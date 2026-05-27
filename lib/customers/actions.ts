@@ -3,6 +3,8 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleSupabaseClient } from '@/lib/supabase/admin'
 import { logAuditEvent } from '@/lib/audit/log-event'
+import { recordConsent } from '@/lib/consent/actions'
+import { CURRENT_DOCUMENT_VERSION } from '@/lib/consent/constants'
 import type { Result } from '@/lib/types/index'
 
 export interface AdminCustomer {
@@ -10,7 +12,6 @@ export interface AdminCustomer {
   full_name: string
   email: string
   is_active: boolean
-  terms_accepted_at: string | null
   brands: Array<{ id: string; name: string; revoked_at: string | null }>
   last_sign_in_at: string | null
 }
@@ -81,7 +82,7 @@ export async function listAdminCustomers(): Promise<Result<AdminCustomer[]>> {
   // Step 3: customer profiles
   const { data: profiles, error: profileError } = await supabase
     .from('users_profile')
-    .select('id, full_name, email, is_active, terms_accepted_at')
+    .select('id, full_name, email, is_active')
     .in('id', customerIds)
     .eq('role', 'customer')
   if (profileError) return internalError(profileError.message)
@@ -104,12 +105,11 @@ export async function listAdminCustomers(): Promise<Result<AdminCustomer[]>> {
   }
 
   const customers: AdminCustomer[] = (profiles ?? []).map(
-    (p: { id: string; full_name: string; email: string; is_active: boolean; terms_accepted_at: string | null }) => ({
+    (p: { id: string; full_name: string; email: string; is_active: boolean }) => ({
       id: p.id,
       full_name: p.full_name,
       email: p.email,
       is_active: p.is_active,
-      terms_accepted_at: p.terms_accepted_at,
       brands: customerBrands[p.id] ?? [],
       last_sign_in_at: lastSignInMap[p.id] ?? null,
     }),
@@ -250,17 +250,5 @@ export async function deactivateCustomer(customerId: string): Promise<Result<voi
 }
 
 export async function acceptInviteTerms(): Promise<Result<void>> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return permissionDenied()
-
-  const { error } = await supabase
-    .from('users_profile')
-    .update({ terms_accepted_at: new Date().toISOString() })
-    .eq('id', user.id)
-  if (error) return internalError(error.message)
-
-  return { ok: true, data: undefined }
+  return recordConsent(CURRENT_DOCUMENT_VERSION)
 }

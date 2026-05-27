@@ -48,11 +48,7 @@ export default async function AdminCustomersPage() {
             <tbody className="divide-y">
               {customers.map((c) => {
                 const activeBrands = c.brands.filter((b) => !b.revoked_at)
-                const status = !c.is_active
-                  ? 'Inativo'
-                  : !c.terms_accepted_at
-                    ? 'Convite pendente'
-                    : 'Ativo'
+                const status = !c.is_active ? 'Inativo' : 'Ativo'
                 return (
                   <tr key={c.id} className="hover:bg-muted/30">
                     <td className="px-4 py-3">{c.full_name}</td>

@@ -20,6 +20,7 @@ export type AuditEventType =
   | 'customer_brand_revoked'
   | 'customer_deactivated'
   | 'pdf_downloaded'
+  | 'consent_accepted'
   | (string & Record<never, never>)
 
 export async function logAuditEvent(

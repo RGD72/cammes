@@ -18,7 +18,7 @@ export default async function CustomerDetailPage({
   const [profileResult, brandsResult, accessResult] = await Promise.all([
     supabase
       .from('users_profile')
-      .select('id, full_name, email, is_active, terms_accepted_at')
+      .select('id, full_name, email, is_active')
       .eq('id', id)
       .eq('role', 'customer')
       .single(),
@@ -40,11 +40,7 @@ export default async function CustomerDetailPage({
     revoked_at: a.revoked_at,
   }))
 
-  const status = !profile.is_active
-    ? 'Inativo'
-    : !profile.terms_accepted_at
-      ? 'Convite pendente'
-      : 'Ativo'
+  const status = !profile.is_active ? 'Inativo' : 'Ativo'
 
   async function handleDeactivate() {
     'use server'

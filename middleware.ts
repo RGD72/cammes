@@ -1,19 +1,20 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
+import { CURRENT_DOCUMENT_VERSION } from '@/lib/consent/constants'
 import type { UserRole } from '@/lib/types'
 
 async function getProfile(
   supabase: Awaited<ReturnType<typeof updateSession>>['supabase'],
   userId: string,
-): Promise<{ role: UserRole; terms_accepted_at: string | null }> {
+): Promise<{ role: UserRole; consented_version: string | null }> {
   const { data } = await supabase
     .from('users_profile')
-    .select('role, terms_accepted_at')
+    .select('role, consented_version')
     .eq('id', userId)
     .single()
   return {
     role: (data?.role as UserRole) ?? 'customer',
-    terms_accepted_at: data?.terms_accepted_at ?? null,
+    consented_version: data?.consented_version ?? null,
   }
 }
 
@@ -27,9 +28,14 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  // /invite/accept — requer sessão ativa mas não verifica terms (é onde o cliente aceita)
-  if (pathname.startsWith('/invite/')) {
+  // /invite/accept e /consent/accept — requerem sessão mas não verificam versão de consentimento
+  if (pathname.startsWith('/invite/') || pathname.startsWith('/consent/')) {
     if (!user) return NextResponse.redirect(new URL('/login', request.url))
+    return supabaseResponse
+  }
+
+  // /legal/ — páginas públicas sem guard de autenticação
+  if (pathname.startsWith('/legal/')) {
     return supabaseResponse
   }
 
@@ -62,13 +68,16 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
-    const { role, terms_accepted_at } = await getProfile(supabase, user.id)
+    const { role, consented_version } = await getProfile(supabase, user.id)
     if (role === 'admin') {
       return NextResponse.redirect(new URL('/admin', request.url))
     }
-    // Customer sem aceite de termos → fluxo de onboarding
-    if (!terms_accepted_at) {
-      return NextResponse.redirect(new URL('/invite/accept', request.url))
+    // Customer sem consentimento ou com versão desatualizada → aceite obrigatório
+    if (!consented_version || consented_version !== CURRENT_DOCUMENT_VERSION) {
+      const isNew = !consented_version
+      return NextResponse.redirect(
+        new URL(isNew ? '/invite/accept' : '/consent/accept', request.url),
+      )
     }
     return supabaseResponse
   }
