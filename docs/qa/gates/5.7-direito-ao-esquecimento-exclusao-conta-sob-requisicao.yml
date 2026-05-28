@@ -1,0 +1,61 @@
+schema: 1
+story: '5.7'
+gate: CONCERNS
+status_reason: 'Todos os 5 critérios de aceite estão satisfeitos e os quality gates passam (176/176 testes, lint, typecheck, build ✅). Dois itens não bloqueantes identificados: UPDATEs sem verificação de erro em executeAccountDeletion() e ausência de testes para 3 funções exportadas.'
+reviewer: 'Quinn'
+updated: '2026-05-27T00:00:00Z'
+top_issues:
+  - id: 'REL-001'
+    severity: medium
+    finding: 'executeAccountDeletion() não verifica os resultados dos UPDATE operations (users_profile, orders, order_items, deletion_requests). Se algum UPDATE falhar silenciosamente, a função retorna ok:true e loga account_deletion_completed mesmo com anonimização incompleta — violação LGPD potencial.'
+    suggested_action: 'Verificar resultado de cada UPDATE crítico e retornar internalError() se houver erro. Mínimo: verificar users_profile UPDATE e auth.admin.updateUserById antes de prosseguir com auditoria.'
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Três funções exportadas sem cobertura de testes unitários: listPendingDeletionRequests(), getMyDeletionRequest(), getCustomerDeletionRequest(). São usadas diretamente por Server Components de UI.'
+    suggested_action: 'Adicionar testes: N-LIST-1 (retorna PERMISSION_DENIED quando não admin), P-MY-1 (retorna solicitação ativa do usuário), N-MY-1 (retorna PERMISSION_DENIED quando não autenticado).'
+  - id: 'DOC-001'
+    severity: low
+    finding: 'docs/architecture/data-model-skeleton.md estava no escopo (In Scope) da story mas não foi atualizado. Tabela deletion_requests não está documentada no arquivo de skeleton.'
+    suggested_action: 'Adicionar seção deletion_requests ao data-model-skeleton.md em próxima story ou como task de manutenção.'
+waiver: { active: false }
+
+# Rastreabilidade de Critérios de Aceite
+ac_traceability:
+  AC1:
+    status: PASS
+    evidence: 'app/account/delete/page.tsx: redirect /login se não autenticado, getMyDeletionRequest() verifica solicitação existente. deletion-request-form.tsx: aviso de irreversibilidade, checkbox não pré-marcado, estado de sucesso/erro. requestAccountDeletion(): INSERT em deletion_requests, CONFLICT guard, sendEmail() fire-and-forget.'
+  AC2:
+    status: PASS
+    evidence: 'app/admin/customers/[id]/page.tsx: seção "Solicitação de Exclusão Pendente" com data da solicitação, prazo de 15 dias calculado (deletionDeadline()), indicação "PRAZO VENCIDO" se isOverdue(). app/admin/customers/page.tsx: badge "Exclusão pendente" via Set de user_ids pendentes.'
+  AC3:
+    status: PASS
+    evidence: 'executeAccountDeletion(): (a) UPDATE users_profile full_name="Conta removida", email="removed-{uuid}@deleted.cammes", phone=NULL, is_active=false; (b) UPDATE orders.customer_name="Cliente removido"; (c) UPDATE order_items.customer_name via order_ids; (d) auth.admin.updateUserById ban_duration=none; (e) UPDATE deletion_requests status=completed; (f) sendEmail() para savedEmail (capturado antes da anonimização).'
+  AC4:
+    status: PASS
+    evidence: 'executeAccountDeletion() não executa DELETE em orders ou order_items. orders.customer_user_id permanece como FK válido (apontando para registro anonimizado em users_profile). Apenas customer_name é substituído. Integridade contábil preservada.'
+  AC5:
+    status: PASS
+    evidence: 'logAuditEvent("account_deletion_requested", { userId, requestedAt }) em requestAccountDeletion(). logAuditEvent("account_deletion_completed", { targetUserId, processedBy, completedAt }) em executeAccountDeletion(). Ambos os event types adicionados ao union AuditEventType em lib/audit/log-event.ts.'
+
+# Verificações de Segurança
+security_checks:
+  service_role_usage: PASS   # createServiceRoleSupabaseClient() apenas em Server Actions ('use server')
+  rls_coverage: PASS         # deletion_requests_self_read FOR SELECT USING (user_id = auth.uid()); INSERT/UPDATE via service_role
+  auth_validation: PASS      # getUser() verificado antes de qualquer operação em todas as funções
+  admin_role_check: PASS     # executeAccountDeletion() e listPendingDeletionRequests() verificam role='admin'
+  pii_capture_order: PASS    # savedEmail capturado ANTES da anonimização — sequência correta
+  no_client_exposure: PASS   # RESEND_API_KEY sem NEXT_PUBLIC_ prefix; sendEmail() apenas server-side
+  graceful_email_degradation: PASS  # sendEmail() retorna {ok:false} silenciosamente se RESEND_API_KEY ausente
+
+# Quality Gates
+quality_gates:
+  lint: PASS
+  typecheck: PASS   # Zero erros novos; 2 pré-existentes em CartTable.test.tsx (Story 5.5)
+  tests: PASS       # 176/176 (+7 novos testes de deletion)
+  build: PASS       # /account/delete ƒ (Dynamic)
+
+# Carry-Forward de Stories Anteriores (não relacionados a esta story)
+carry_forward:
+  - Story-5.6/REL-001: recordConsent() UPDATE users_profile.consented_version sem verificação de resultado (medium)
+  - Story-5.5/PERF-001: getDistinctEventTypes() sem LIMIT
+  - Story-5.5/SEC-001: role='admin' check explícito em funções de leitura de audit

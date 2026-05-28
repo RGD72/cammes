@@ -1,5 +1,6 @@
 import { listAdminCustomers } from '@/lib/customers/actions'
 import { listAdminBrands } from '@/lib/brands/actions'
+import { listPendingDeletionRequests } from '@/lib/deletion/actions'
 import { InviteCustomerModal } from '@/components/admin/invite-customer-modal'
 import Link from 'next/link'
 
@@ -13,9 +14,16 @@ function formatDate(iso: string | null): string {
 }
 
 export default async function AdminCustomersPage() {
-  const [result, brands] = await Promise.all([listAdminCustomers(), listAdminBrands()])
+  const [result, brands, deletionResult] = await Promise.all([
+    listAdminCustomers(),
+    listAdminBrands(),
+    listPendingDeletionRequests(),
+  ])
 
   const customers = result.ok ? result.data : []
+  const pendingDeletionIds = new Set(
+    (deletionResult.ok ? deletionResult.data : []).map((r) => r.user_id).filter(Boolean),
+  )
 
   return (
     <div className="p-6">
@@ -86,12 +94,19 @@ export default async function AdminCustomersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/admin/customers/${c.id}`}
-                        className="text-xs underline hover:no-underline"
-                      >
-                        Ver
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        {pendingDeletionIds.has(c.id) && (
+                          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-700">
+                            Exclusão pendente
+                          </span>
+                        )}
+                        <Link
+                          href={`/admin/customers/${c.id}`}
+                          className="text-xs underline hover:no-underline"
+                        >
+                          Ver
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 )

@@ -21,6 +21,8 @@ export type AuditEventType =
   | 'customer_deactivated'
   | 'pdf_downloaded'
   | 'consent_accepted'
+  | 'account_deletion_requested'
+  | 'account_deletion_completed'
   | (string & Record<never, never>)
 
 export async function logAuditEvent(
