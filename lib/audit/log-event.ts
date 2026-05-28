@@ -13,6 +13,7 @@ export type AuditEventType =
   | 'extraction_started'
   | 'extraction_completed'
   | 'extraction_failed'
+  | 'cart_item_added'
   | 'order_submitted'
   | 'order_viewed'
   | 'customer_invited'

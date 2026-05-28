@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: 'Clientes', href: '/admin/customers' },
   { label: 'Configurações', href: '/admin/settings' },
   { label: 'Auditoria', href: '/admin/audit' },
+  { label: 'KPIs', href: '/admin/reports/kpis' },
 ] as const
 
 export function AdminNav() {

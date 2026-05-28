@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { logAuditEvent } from '@/lib/audit/log-event'
 import type { Result } from '@/lib/types/index'
 
 export interface Cart {
@@ -178,6 +179,14 @@ export async function addItem(input: AddItemInput): Promise<Result<CartItem>> {
     .single()
 
   if (itemError || !item) return internalError('Erro ao adicionar item')
+
+  void logAuditEvent('cart_item_added', {
+    userId: user.id,
+    brandId,
+    productId,
+    quantity,
+  })
+
   return { ok: true, data: item as CartItem }
 }
 
