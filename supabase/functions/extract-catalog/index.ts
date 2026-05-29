@@ -1,6 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import * as pdfjs from 'npm:pdfjs-dist@4'
+import mupdf from 'https://esm.sh/mupdf@1'
 import { z } from 'npm:zod@3'
+
+// mupdf replaces npm:pdfjs-dist@4 (28MB bundled → WASM loaded at runtime via esm.sh).
+// No browser APIs needed: mupdf renders PDF pages natively in WASM and outputs PNG bytes directly.
 
 const EXTRACTION_PROMPT = `Você é um assistente especializado em extração de dados de catálogos de moda.
 
@@ -102,104 +105,118 @@ async function processExtraction(payload: {
     }
 
     const pdfArrayBuffer = await pdfBlob.arrayBuffer()
-    const doc = await pdfjs.getDocument({ data: pdfArrayBuffer }).promise
+    const doc = mupdf.Document.openDocument(new Uint8Array(pdfArrayBuffer), 'application/pdf')
 
-    for (let pageIndex = 1; pageIndex <= pagesTotal; pageIndex++) {
-      let pageProducts = 0
-      let pageError: string | null = null
+    try {
+      for (let pageIndex = 1; pageIndex <= pagesTotal; pageIndex++) {
+        let pageProducts = 0
+        let pageError: string | null = null
 
-      try {
-        const page = await doc.getPage(pageIndex)
-        const naturalViewport = page.getViewport({ scale: 1 })
-        const scale = 1024 / naturalViewport.width
-        const viewport = page.getViewport({ scale })
-        const canvas = new OffscreenCanvas(Math.floor(viewport.width), Math.floor(viewport.height))
-        const ctx = canvas.getContext('2d')
-        if (!ctx) throw new Error('Falha ao criar 2D rendering context')
-        await page.render({ canvasContext: ctx as unknown as CanvasRenderingContext2D, viewport }).promise
-        const blob = await canvas.convertToBlob({ type: 'image/png' })
-        const bytes = new Uint8Array(await blob.arrayBuffer())
-        let base64Png = ''
-        for (let i = 0; i < bytes.length; i += 8192) {
-          base64Png += String.fromCharCode(...bytes.subarray(i, i + 8192))
-        }
-        base64Png = btoa(base64Png)
-
-        const orResponse = await withRetry(async () => {
-          const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${openrouterKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: modelId,
-              messages: [
-                {
-                  role: 'user',
-                  content: [
-                    { type: 'text', text: EXTRACTION_PROMPT },
-                    { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Png}` } },
-                  ],
-                },
-              ],
-              response_format: { type: 'json_object' },
-            }),
-          })
-          if (!res.ok) {
-            const body = await res.text()
-            throw new Error(`OpenRouter ${res.status}: ${body}`)
-          }
-          return res.json()
-        })
-
-        const usage = orResponse.usage ?? {}
-        const tokensUsed = (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0)
-        totalCostUsd += tokensUsed * (pricing / 1000)
-
-        let pageResult: { products: Array<Record<string, unknown>> } = { products: [] }
         try {
-          const raw = JSON.parse(orResponse.choices?.[0]?.message?.content ?? '{}')
-          pageResult = ZodPageResult.parse(raw)
-        } catch (parseErr) {
-          pageError = `Página ${pageIndex}: JSON inválido — ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
+          // mupdf uses 0-based page indexes
+          const page = doc.loadPage(pageIndex - 1)
+          let pixmap: typeof mupdf.Pixmap | null = null
+
+          try {
+            const bounds = page.getBounds() // [x0, y0, x1, y1] in PDF points (72 DPI)
+            const naturalWidth = bounds[2] - bounds[0]
+            const scale = 1024 / naturalWidth
+            pixmap = page.toPixmap(
+              mupdf.Matrix.scale(scale, scale),
+              mupdf.ColorSpace.DeviceRGB,
+              false, // no alpha channel
+            )
+            const pngBytes = pixmap.asPNG() // Uint8Array — no OffscreenCanvas needed
+
+            // Chunked base64 to avoid stack overflow on large pages
+            let base64Png = ''
+            for (let i = 0; i < pngBytes.length; i += 8192) {
+              base64Png += String.fromCharCode(...pngBytes.subarray(i, i + 8192))
+            }
+            base64Png = btoa(base64Png)
+
+            const orResponse = await withRetry(async () => {
+              const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${openrouterKey}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model: modelId,
+                  messages: [
+                    {
+                      role: 'user',
+                      content: [
+                        { type: 'text', text: EXTRACTION_PROMPT },
+                        { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Png}` } },
+                      ],
+                    },
+                  ],
+                  response_format: { type: 'json_object' },
+                }),
+              })
+              if (!res.ok) {
+                const body = await res.text()
+                throw new Error(`OpenRouter ${res.status}: ${body}`)
+              }
+              return res.json()
+            })
+
+            const usage = orResponse.usage ?? {}
+            const tokensUsed = (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0)
+            totalCostUsd += tokensUsed * (pricing / 1000)
+
+            let pageResult: { products: Array<Record<string, unknown>> } = { products: [] }
+            try {
+              const raw = JSON.parse(orResponse.choices?.[0]?.message?.content ?? '{}')
+              pageResult = ZodPageResult.parse(raw)
+            } catch (parseErr) {
+              pageError = `Página ${pageIndex}: JSON inválido — ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
+            }
+
+            if (pageResult.products.length > 0) {
+              const rows = pageResult.products.map((p) => ({
+                brand_id: brandId,
+                catalog_id: catalogId,
+                extraction_job_id: jobId,
+                reference: p.reference ?? null,
+                description: p.description ?? null,
+                sizes: p.sizes ?? [],
+                colors: p.colors ?? [],
+                price_brl: p.price_brl ?? null,
+                look_group: p.look_group ?? null,
+                source_page: pageIndex,
+              }))
+              // Idempotent upsert: ON CONFLICT (extraction_job_id, source_page, reference) DO NOTHING
+              const { error: insertErr } = await supabase
+                .from('products')
+                .upsert(rows, { onConflict: 'extraction_job_id,source_page,reference', ignoreDuplicates: true })
+              if (!insertErr) pageProducts = rows.length
+            }
+          } finally {
+            // Free WASM memory per page to avoid accumulation across large PDFs
+            pixmap?.destroy()
+            page.destroy()
+          }
+
+          totalProducts += pageProducts
+        } catch (pageErr) {
+          pageError = `Página ${pageIndex}: ${pageErr instanceof Error ? pageErr.message : String(pageErr)}`
         }
 
-        if (pageResult.products.length > 0) {
-          const rows = pageResult.products.map((p) => ({
-            brand_id: brandId,
-            catalog_id: catalogId,
-            extraction_job_id: jobId,
-            reference: p.reference ?? null,
-            description: p.description ?? null,
-            sizes: p.sizes ?? [],
-            colors: p.colors ?? [],
-            price_brl: p.price_brl ?? null,
-            look_group: p.look_group ?? null,
-            source_page: pageIndex,
-          }))
-          // Idempotent upsert: ON CONFLICT (extraction_job_id, source_page, reference) DO NOTHING
-          // Relies on idx_products_job_page_ref (partial, WHERE reference IS NOT NULL)
-          const { error: insertErr } = await supabase
-            .from('products')
-            .upsert(rows, { onConflict: 'extraction_job_id,source_page,reference', ignoreDuplicates: true })
-          if (!insertErr) pageProducts = rows.length
+        const update: Record<string, unknown> = {
+          pages_processed: pageIndex,
+          products_count: totalProducts,
+          actual_cost_usd: totalCostUsd,
+          actual_cost_brl: totalCostUsd * brlRate,
         }
+        if (pageError) update.error_message = pageError
 
-        totalProducts += pageProducts
-      } catch (pageErr) {
-        pageError = `Página ${pageIndex}: ${pageErr instanceof Error ? pageErr.message : String(pageErr)}`
+        await supabase.from('extraction_jobs').update(update).eq('id', jobId)
       }
-
-      const update: Record<string, unknown> = {
-        pages_processed: pageIndex,
-        products_count: totalProducts,
-        actual_cost_usd: totalCostUsd,
-        actual_cost_brl: totalCostUsd * brlRate,
-      }
-      if (pageError) update.error_message = pageError
-
-      await supabase.from('extraction_jobs').update(update).eq('id', jobId)
+    } finally {
+      doc.destroy()
     }
 
     await supabase
