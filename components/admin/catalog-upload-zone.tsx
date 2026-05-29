@@ -37,7 +37,8 @@ async function uploadWithProgress(
   onProgress: (pct: number) => void,
 ): Promise<{ error: string | null }> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!supabaseUrl) return { error: 'Configuração de ambiente ausente.' }
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !anonKey) return { error: 'Configuração de ambiente ausente.' }
 
   const url = `${supabaseUrl}/storage/v1/object/catalogs/${path}`
 
@@ -45,6 +46,7 @@ async function uploadWithProgress(
     const xhr = new XMLHttpRequest()
     xhr.open('POST', url)
     xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`)
+    xhr.setRequestHeader('apikey', anonKey)
     xhr.setRequestHeader('x-upsert', 'false')
     xhr.setRequestHeader('Content-Type', ALLOWED_MIME)
 
