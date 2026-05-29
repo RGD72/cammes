@@ -1,7 +1,7 @@
 'use server'
 
 import { unstable_cache } from 'next/cache'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleSupabaseClient } from '@/lib/supabase/admin'
 
 export interface AdminDashboardKpis {
   brandCount: number
@@ -47,7 +47,7 @@ function thirtyDaysAgo(): string {
 }
 
 async function fetchAdminDashboardKpis(adminId: string): Promise<AdminDashboardKpis> {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createServiceRoleSupabaseClient()
 
   const { data: brands } = await supabase
     .from('brands')
@@ -140,7 +140,7 @@ export async function getAdminDashboardKpis(adminId: string): Promise<AdminDashb
 }
 
 async function fetchRecentOrders(adminId: string, limit = 5): Promise<RecentOrder[]> {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createServiceRoleSupabaseClient()
 
   const { data: brands } = await supabase
     .from('brands')
@@ -191,7 +191,7 @@ async function fetchRecentExtractionJobs(
   adminId: string,
   limit = 5,
 ): Promise<RecentExtractionJob[]> {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createServiceRoleSupabaseClient()
 
   const { data: brands } = await supabase
     .from('brands')
