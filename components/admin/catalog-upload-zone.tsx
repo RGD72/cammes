@@ -60,6 +60,12 @@ async function uploadWithProgress(
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve({ error: null })
       } else {
+        console.log('[CatalogUpload] upload error', {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          responseText: xhr.responseText,
+          responseHeaders: xhr.getAllResponseHeaders(),
+        })
         let msg = `Upload falhou (HTTP ${xhr.status}).`
         try {
           const body = JSON.parse(xhr.responseText)
@@ -69,7 +75,14 @@ async function uploadWithProgress(
       }
     }
 
-    xhr.onerror = () => resolve({ error: 'Erro de rede durante o upload.' })
+    xhr.onerror = () => {
+      console.log('[CatalogUpload] network error', {
+        status: xhr.status,
+        statusText: xhr.statusText,
+        responseText: xhr.responseText,
+      })
+      resolve({ error: 'Erro de rede durante o upload.' })
+    }
     xhr.onabort = () => resolve({ error: 'Upload cancelado.' })
 
     xhr.send(file)
