@@ -27,10 +27,10 @@ export async function getAdminOpenRouterModel(adminId: string): Promise<string> 
       .eq('admin_user_id', adminId)
       .single()
 
-    if (error || !data?.openrouter_model) return 'google/gemini-flash-2.5'
+    if (error || !data?.openrouter_model) return 'google/gemini-2.5-flash'
 
     return data.openrouter_model
   } catch {
-    return 'google/gemini-flash-2.5'
+    return 'google/gemini-2.5-flash'
   }
 }

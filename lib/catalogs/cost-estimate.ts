@@ -7,13 +7,13 @@ export interface ModelPricing {
 }
 
 export const MODEL_PRICING: Record<string, ModelPricing> = {
-  'google/gemini-flash-2.5': { priceUsdPer1k: GEMINI_FLASH_25_PRICE_USD_PER_1K },
+  'google/gemini-2.5-flash': { priceUsdPer1k: GEMINI_FLASH_25_PRICE_USD_PER_1K },
   'google/gemini-pro-2.5': { priceUsdPer1k: 0.0015 },
   'openai/gpt-4o': { priceUsdPer1k: 0.0025 },
   'anthropic/claude-3-5-sonnet': { priceUsdPer1k: 0.003 },
 }
 
-const DEFAULT_MODEL = 'google/gemini-flash-2.5'
+const DEFAULT_MODEL = 'google/gemini-2.5-flash'
 
 export function calculateExtractionCost(
   pages: number,

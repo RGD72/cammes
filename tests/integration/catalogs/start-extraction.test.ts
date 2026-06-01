@@ -106,7 +106,7 @@ describe('startExtractionJob — happy path (fetch 200)', () => {
     setupAuthMock()
 
     const supabaseMock = makeSupabaseMock({
-      settingsRow: { openrouter_key_encrypted: 'encrypted-key', openrouter_model: 'google/gemini-flash-2.5' },
+      settingsRow: { openrouter_key_encrypted: 'encrypted-key', openrouter_model: 'google/gemini-2.5-flash' },
       catalogRow: { file_path: TEST_FILE_PATH },
       jobInsertId: TEST_JOB_ID,
     })
@@ -118,7 +118,7 @@ describe('startExtractionJob — happy path (fetch 200)', () => {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({
-            data: { openrouter_key_encrypted: 'encrypted-key', openrouter_model: 'google/gemini-flash-2.5' },
+            data: { openrouter_key_encrypted: 'encrypted-key', openrouter_model: 'google/gemini-2.5-flash' },
           }),
         }
       }

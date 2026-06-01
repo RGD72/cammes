@@ -1,13 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import mupdf from 'https://esm.sh/mupdf@1'
 import { z } from 'npm:zod@3'
 
-// mupdf replaces npm:pdfjs-dist@4 (28MB bundled → WASM loaded at runtime via esm.sh).
-// No browser APIs needed: mupdf renders PDF pages natively in WASM and outputs PNG bytes directly.
+// PDF sent natively to Gemini Flash 2.5 via OpenRouter's document content type.
+// No page rendering library needed — the model processes all pages in a single call.
 
 const EXTRACTION_PROMPT = `Você é um assistente especializado em extração de dados de catálogos de moda.
 
-Analise a imagem fornecida (uma página de catálogo) e extraia todos os produtos visíveis.
+Analise o documento PDF fornecido e extraia TODOS os produtos de TODAS as páginas.
 
 Para cada produto encontrado, retorne um objeto JSON com os seguintes campos:
 - reference: código ou referência do produto (string ou null)
@@ -16,6 +15,7 @@ Para cada produto encontrado, retorne um objeto JSON com os seguintes campos:
 - colors: cores disponíveis (array de strings, ex: ["Preto", "Branco"])
 - price_brl: preço em reais (número decimal ou null)
 - look_group: grupo de look ou coleção (string ou null)
+- source_page: número da página do PDF onde o produto aparece (inteiro, 1-indexed, ou null)
 
 Retorne APENAS um objeto JSON válido no seguinte formato, sem markdown, sem explicações adicionais:
 
@@ -27,18 +27,19 @@ Retorne APENAS um objeto JSON válido no seguinte formato, sem markdown, sem exp
       "sizes": ["P", "M", "G"],
       "colors": ["Preto", "Branco"],
       "price_brl": 129.90,
-      "look_group": "Verão 2026"
+      "look_group": "Verão 2026",
+      "source_page": 3
     }
   ]
 }
 
-Se a página não contiver produtos (ex: página de capa, editorial sem produtos), retorne:
+Se o documento não contiver produtos, retorne:
 { "products": [] }
 
-Regras: retorne null para campos ausentes; sizes e colors devem ser arrays; price_brl deve ser número decimal; responda APENAS com JSON válido, sem markdown.`
+Regras: retorne null para campos ausentes; sizes e colors devem ser arrays; price_brl deve ser número decimal; source_page deve ser o número inteiro da página; responda APENAS com JSON válido, sem markdown.`
 
 const MODEL_PRICING: Record<string, number> = {
-  'google/gemini-flash-2.5': 0.0004,
+  'google/gemini-2.5-flash': 0.0004,
   'google/gemini-pro-vision': 0.001,
   'openai/gpt-4o': 0.005,
   'openai/gpt-4o-mini': 0.00015,
@@ -52,9 +53,10 @@ const ZodProduct = z.object({
   colors: z.array(z.string()).default([]),
   price_brl: z.number().optional().nullable(),
   look_group: z.string().optional().nullable(),
+  source_page: z.number().int().optional().nullable(),
 })
 
-const ZodPageResult = z.object({
+const ZodExtractionResult = z.object({
   products: z.array(ZodProduct),
 })
 
@@ -92,9 +94,6 @@ async function processExtraction(payload: {
     .update({ status: 'running', started_at: new Date().toISOString() })
     .eq('id', jobId)
 
-  let totalCostUsd = 0
-  let totalProducts = 0
-
   try {
     const { data: pdfBlob, error: downloadError } = await supabase.storage
       .from('catalogs')
@@ -104,131 +103,92 @@ async function processExtraction(payload: {
       throw new Error(`Falha ao baixar PDF: ${downloadError?.message ?? 'blob vazio'}`)
     }
 
-    const pdfArrayBuffer = await pdfBlob.arrayBuffer()
-    const doc = mupdf.Document.openDocument(new Uint8Array(pdfArrayBuffer), 'application/pdf')
+    const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer())
 
-    try {
-      for (let pageIndex = 1; pageIndex <= pagesTotal; pageIndex++) {
-        let pageProducts = 0
-        let pageError: string | null = null
+    // Chunked base64 to avoid stack overflow on large PDFs
+    let base64Pdf = ''
+    for (let i = 0; i < pdfBytes.length; i += 8192) {
+      base64Pdf += String.fromCharCode(...pdfBytes.subarray(i, i + 8192))
+    }
+    base64Pdf = btoa(base64Pdf)
 
-        try {
-          // mupdf uses 0-based page indexes
-          const page = doc.loadPage(pageIndex - 1)
-          let pixmap: typeof mupdf.Pixmap | null = null
-
-          try {
-            const bounds = page.getBounds() // [x0, y0, x1, y1] in PDF points (72 DPI)
-            const naturalWidth = bounds[2] - bounds[0]
-            const scale = 1024 / naturalWidth
-            pixmap = page.toPixmap(
-              mupdf.Matrix.scale(scale, scale),
-              mupdf.ColorSpace.DeviceRGB,
-              false, // no alpha channel
-            )
-            const pngBytes = pixmap.asPNG() // Uint8Array — no OffscreenCanvas needed
-
-            // Chunked base64 to avoid stack overflow on large pages
-            let base64Png = ''
-            for (let i = 0; i < pngBytes.length; i += 8192) {
-              base64Png += String.fromCharCode(...pngBytes.subarray(i, i + 8192))
-            }
-            base64Png = btoa(base64Png)
-
-            const orResponse = await withRetry(async () => {
-              const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${openrouterKey}`,
-                  'Content-Type': 'application/json',
+    const orResponse = await withRetry(async () => {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openrouterKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: modelId,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: EXTRACTION_PROMPT },
+                {
+                  type: 'file',
+                  file: {
+                    filename: 'catalog.pdf',
+                    file_data: `data:application/pdf;base64,${base64Pdf}`,
+                  },
                 },
-                body: JSON.stringify({
-                  model: modelId,
-                  messages: [
-                    {
-                      role: 'user',
-                      content: [
-                        { type: 'text', text: EXTRACTION_PROMPT },
-                        { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Png}` } },
-                      ],
-                    },
-                  ],
-                  response_format: { type: 'json_object' },
-                }),
-              })
-              if (!res.ok) {
-                const body = await res.text()
-                throw new Error(`OpenRouter ${res.status}: ${body}`)
-              }
-              return res.json()
-            })
-
-            const usage = orResponse.usage ?? {}
-            const tokensUsed = (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0)
-            totalCostUsd += tokensUsed * (pricing / 1000)
-
-            let pageResult: { products: Array<Record<string, unknown>> } = { products: [] }
-            try {
-              const raw = JSON.parse(orResponse.choices?.[0]?.message?.content ?? '{}')
-              pageResult = ZodPageResult.parse(raw)
-            } catch (parseErr) {
-              pageError = `Página ${pageIndex}: JSON inválido — ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
-            }
-
-            if (pageResult.products.length > 0) {
-              const rows = pageResult.products.map((p) => ({
-                brand_id: brandId,
-                catalog_id: catalogId,
-                extraction_job_id: jobId,
-                reference: p.reference ?? null,
-                description: p.description ?? null,
-                sizes: p.sizes ?? [],
-                colors: p.colors ?? [],
-                price_brl: p.price_brl ?? null,
-                look_group: p.look_group ?? null,
-                source_page: pageIndex,
-              }))
-              // Idempotent upsert: ON CONFLICT (extraction_job_id, source_page, reference) DO NOTHING
-              const { error: insertErr } = await supabase
-                .from('products')
-                .upsert(rows, { onConflict: 'extraction_job_id,source_page,reference', ignoreDuplicates: true })
-              if (!insertErr) pageProducts = rows.length
-            }
-          } finally {
-            // Free WASM memory per page to avoid accumulation across large PDFs
-            pixmap?.destroy()
-            page.destroy()
-          }
-
-          totalProducts += pageProducts
-        } catch (pageErr) {
-          pageError = `Página ${pageIndex}: ${pageErr instanceof Error ? pageErr.message : String(pageErr)}`
-        }
-
-        const update: Record<string, unknown> = {
-          pages_processed: pageIndex,
-          products_count: totalProducts,
-          actual_cost_usd: totalCostUsd,
-          actual_cost_brl: totalCostUsd * brlRate,
-        }
-        if (pageError) update.error_message = pageError
-
-        await supabase.from('extraction_jobs').update(update).eq('id', jobId)
+              ],
+            },
+          ],
+          response_format: { type: 'json_object' },
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        throw new Error(`OpenRouter ${res.status}: ${body}`)
       }
-    } finally {
-      doc.destroy()
+      return res.json()
+    })
+
+    const usage = orResponse.usage ?? {}
+    const tokensUsed = (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0)
+    const totalCostUsd = tokensUsed * (pricing / 1000)
+
+    let products: z.infer<typeof ZodProduct>[] = []
+    let parseError: string | null = null
+    try {
+      const raw = JSON.parse(orResponse.choices?.[0]?.message?.content ?? '{}')
+      products = ZodExtractionResult.parse(raw).products
+    } catch (parseErr) {
+      parseError = `JSON inválido: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
     }
 
-    await supabase
-      .from('extraction_jobs')
-      .update({
-        status: 'done',
-        completed_at: new Date().toISOString(),
-        actual_cost_usd: totalCostUsd,
-        actual_cost_brl: totalCostUsd * brlRate,
-      })
-      .eq('id', jobId)
+    if (products.length > 0) {
+      const rows = products.map((p) => ({
+        brand_id: brandId,
+        catalog_id: catalogId,
+        extraction_job_id: jobId,
+        reference: p.reference ?? null,
+        description: p.description ?? null,
+        sizes: p.sizes ?? [],
+        colors: p.colors ?? [],
+        price_brl: p.price_brl ?? null,
+        look_group: p.look_group ?? null,
+        source_page: p.source_page ?? null,
+      }))
+      // Idempotent upsert: ON CONFLICT (extraction_job_id, source_page, reference) DO NOTHING
+      await supabase
+        .from('products')
+        .upsert(rows, { onConflict: 'extraction_job_id,source_page,reference', ignoreDuplicates: true })
+    }
 
+    const doneUpdate: Record<string, unknown> = {
+      status: 'done',
+      completed_at: new Date().toISOString(),
+      pages_processed: pagesTotal,
+      products_count: products.length,
+      actual_cost_usd: totalCostUsd,
+      actual_cost_brl: totalCostUsd * brlRate,
+    }
+    if (parseError) doneUpdate.error_message = parseError
+
+    await supabase.from('extraction_jobs').update(doneUpdate).eq('id', jobId)
     await supabase.from('catalogs').update({ status: 'ready_for_review' }).eq('id', catalogId)
   } catch (err) {
     await supabase

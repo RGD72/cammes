@@ -60,7 +60,7 @@ export async function saveOpenRouterKey(formData: FormData): Promise<ActionResul
 export async function getOpenRouterStatus(): Promise<OpenRouterStatus> {
   const adminId = await getCurrentAdminId()
   if (!adminId) {
-    return { hasKey: false, maskedKey: null, model: 'google/gemini-flash-2.5', monthlyCostUsd: 0, monthlyCostBrl: 0 }
+    return { hasKey: false, maskedKey: null, model: 'google/gemini-2.5-flash', monthlyCostUsd: 0, monthlyCostBrl: 0 }
   }
 
   const supabase = createServiceRoleSupabaseClient()
@@ -72,7 +72,7 @@ export async function getOpenRouterStatus(): Promise<OpenRouterStatus> {
 
   let hasKey = false
   let maskedKey: string | null = null
-  const model = data?.openrouter_model ?? 'google/gemini-flash-2.5'
+  const model = data?.openrouter_model ?? 'google/gemini-2.5-flash'
 
   if (data?.openrouter_key_encrypted) {
     try {

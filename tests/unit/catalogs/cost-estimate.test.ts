@@ -7,7 +7,7 @@ import {
   COST_THRESHOLD_BRL,
 } from '@/lib/catalogs/cost-estimate'
 
-const DEFAULT_MODEL = 'google/gemini-flash-2.5'
+const DEFAULT_MODEL = 'google/gemini-2.5-flash'
 const UNKNOWN_MODEL = 'unknown/model-xyz'
 
 function expectedUsd(pages: number): number {

@@ -35,7 +35,7 @@ function makeSupabaseAdmin(overrides: Record<string, unknown> = {}) {
     extraction_jobs_update: { data: null, error: null },
     products_delete: { data: null, error: null },
     admin_settings: {
-      data: { openrouter_key_encrypted: 'enc-key', openrouter_model: 'google/gemini-flash-2.5' },
+      data: { openrouter_key_encrypted: 'enc-key', openrouter_model: 'google/gemini-2.5-flash' },
       error: null,
     },
     catalogs: { data: { file_path: 'brands/brand-id/cat.pdf', page_count: 10 }, error: null },

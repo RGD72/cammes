@@ -37,7 +37,7 @@ export async function startExtractionJob(
   let modelId: string
   try {
     openrouterKey = await decryptKey(settings.openrouter_key_encrypted)
-    modelId = settings.openrouter_model ?? 'google/gemini-flash-2.5'
+    modelId = settings.openrouter_model ?? 'google/gemini-2.5-flash'
   } catch {
     return { jobId: null, error: 'Falha ao acessar chave OpenRouter.' }
   }

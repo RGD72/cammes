@@ -96,6 +96,6 @@ describe('getAdminOpenRouterModel', () => {
 
     const result = await getAdminOpenRouterModel('admin-uuid-123')
 
-    expect(result).toBe('google/gemini-flash-2.5')
+    expect(result).toBe('google/gemini-2.5-flash')
   })
 })
