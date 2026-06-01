@@ -4,6 +4,18 @@ import { z } from 'npm:zod@3'
 // PDF sent natively to Gemini Flash 2.5 via OpenRouter's document content type.
 // No page rendering library needed — the model processes all pages in a single call.
 
+// Global handlers ensure any rejection that escapes processExtraction's internal
+// try/catch (e.g. failed DB update inside the catch block, or a throw before the
+// try) surfaces in Edge Function logs instead of disappearing silently.
+addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+  console.error('[extract-catalog] unhandledrejection:', event.reason)
+  event.preventDefault()
+})
+
+addEventListener('error', (event: ErrorEvent) => {
+  console.error('[extract-catalog] uncaught error:', event.error ?? event.message)
+})
+
 const EXTRACTION_PROMPT = `Você é um assistente especializado em extração de dados de catálogos de moda.
 
 Analise o documento PDF fornecido e extraia TODOS os produtos de TODAS as páginas.
@@ -89,10 +101,16 @@ async function processExtraction(payload: {
   const pricing = MODEL_PRICING[modelId] ?? DEFAULT_PRICING
   const brlRate = parseFloat(Deno.env.get('BRL_USD_RATE') ?? '5.80')
 
-  await supabase
-    .from('extraction_jobs')
-    .update({ status: 'running', started_at: new Date().toISOString() })
-    .eq('id', jobId)
+  // Outside the main try so a DB failure here doesn't mask the real error —
+  // but wrapped so it can't escape as an unhandled rejection.
+  try {
+    await supabase
+      .from('extraction_jobs')
+      .update({ status: 'running', started_at: new Date().toISOString() })
+      .eq('id', jobId)
+  } catch (initErr) {
+    console.error('[extract-catalog] failed to set running status:', initErr)
+  }
 
   try {
     const { data: pdfBlob, error: downloadError } = await supabase.storage
@@ -173,9 +191,14 @@ async function processExtraction(payload: {
         source_page: p.source_page ?? null,
       }))
       // Idempotent upsert: ON CONFLICT (extraction_job_id, source_page, reference) DO NOTHING
-      await supabase
+      // Requires a non-partial unique index — see migration fix_products_upsert_index.
+      const { error: upsertErr } = await supabase
         .from('products')
         .upsert(rows, { onConflict: 'extraction_job_id,source_page,reference', ignoreDuplicates: true })
+      if (upsertErr) {
+        console.error('[extract-catalog] upsert failed:', upsertErr)
+        parseError = parseError ?? `Erro ao salvar produtos: ${upsertErr.message}`
+      }
     }
 
     const doneUpdate: Record<string, unknown> = {
@@ -191,14 +214,19 @@ async function processExtraction(payload: {
     await supabase.from('extraction_jobs').update(doneUpdate).eq('id', jobId)
     await supabase.from('catalogs').update({ status: 'ready_for_review' }).eq('id', catalogId)
   } catch (err) {
-    await supabase
-      .from('extraction_jobs')
-      .update({
-        status: 'failed',
-        error_message: err instanceof Error ? err.message : 'Erro interno',
-        completed_at: new Date().toISOString(),
-      })
-      .eq('id', jobId)
+    console.error('[extract-catalog] extraction failed:', err)
+    try {
+      await supabase
+        .from('extraction_jobs')
+        .update({
+          status: 'failed',
+          error_message: err instanceof Error ? err.message : 'Erro interno',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', jobId)
+    } catch (updateErr) {
+      console.error('[extract-catalog] failed to persist error status:', updateErr)
+    }
   }
 }
 
@@ -217,10 +245,15 @@ Deno.serve(async (req) => {
     return new Response('Missing X-OpenRouter-Key header', { status: 400 })
   }
 
-  const payload = await req.json()
+  let payload: Record<string, unknown>
+  try {
+    payload = await req.json()
+  } catch {
+    return new Response('Invalid JSON body', { status: 400 })
+  }
 
   // Responde 200 imediatamente; processamento ocorre em background
-  EdgeRuntime.waitUntil(processExtraction({ ...payload, openrouterKey }))
+  EdgeRuntime.waitUntil(processExtraction({ ...payload, openrouterKey } as Parameters<typeof processExtraction>[0]))
 
   return new Response(JSON.stringify({ status: 'accepted' }), {
     headers: { 'Content-Type': 'application/json' },
