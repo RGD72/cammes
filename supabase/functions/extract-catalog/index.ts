@@ -243,9 +243,12 @@ async function processExtraction(payload: {
 }
 
 Deno.serve(async (req) => {
-  const authHeader = req.headers.get('Authorization')
+  // Gateway receives Authorization: Bearer {anonKey} — validated by Supabase infra.
+  // We validate server-to-server trust via X-Service-Role-Key, which is never
+  // forwarded to the client and only set by the Next.js server action.
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  if (!authHeader || authHeader !== `Bearer ${serviceRoleKey}`) {
+  const incomingServiceKey = req.headers.get('X-Service-Role-Key')
+  if (!incomingServiceKey || incomingServiceKey !== serviceRoleKey) {
     return new Response('Unauthorized', { status: 401 })
   }
 

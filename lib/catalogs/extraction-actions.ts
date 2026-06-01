@@ -72,6 +72,7 @@ export async function startExtractionJob(
   await supabase.from('catalogs').update({ status: 'processing' }).eq('id', catalogId)
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
   let edgeFnOk = false
@@ -79,8 +80,13 @@ export async function startExtractionJob(
     const res = await fetch(`${supabaseUrl}/functions/v1/extract-catalog`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${serviceRoleKey}`,
-        apikey: serviceRoleKey,
+        // Supabase gateway requires anon key as the JWT bearer — sb_secret_ format
+        // is rejected as a bearer token by the gateway's JWT validator.
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
+        // Service role key passed separately for the Edge Function to authenticate
+        // server-to-server calls internally (Supabase client + storage downloads).
+        'X-Service-Role-Key': serviceRoleKey,
         'Content-Type': 'application/json',
         'X-OpenRouter-Key': openrouterKey,
       },
