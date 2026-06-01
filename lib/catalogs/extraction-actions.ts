@@ -80,6 +80,7 @@ export async function startExtractionJob(
       method: 'POST',
       headers: {
         Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
         'Content-Type': 'application/json',
         'X-OpenRouter-Key': openrouterKey,
       },
