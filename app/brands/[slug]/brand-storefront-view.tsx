@@ -11,9 +11,10 @@ interface Props {
   brand: Brand
   products: Product[]
   catalogId: string | null
+  isPreview?: boolean
 }
 
-export function BrandStorefrontView({ brand, products, catalogId }: Props) {
+export function BrandStorefrontView({ brand, products, catalogId, isPreview = false }: Props) {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedLooks, setSelectedLooks] = useState<string[]>([])
@@ -78,6 +79,18 @@ export function BrandStorefrontView({ brand, products, catalogId }: Props) {
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
+      {isPreview && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex items-center gap-3">
+          <span className="text-amber-600 text-lg" aria-hidden>⚠</span>
+          <div>
+            <p className="text-sm font-medium text-amber-800">Modo preview — vitrine não publicada</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Somente você (admin) está vendo esta página. Clientes não têm acesso enquanto a vitrine não for publicada.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>

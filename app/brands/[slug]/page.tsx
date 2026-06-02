@@ -32,6 +32,7 @@ export default async function BrandStorefrontPage({ params }: Props) {
       brand={brand}
       products={products}
       catalogId={catalog?.id ?? null}
+      isPreview={!brand.published}
     />
   )
 }

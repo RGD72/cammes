@@ -244,6 +244,21 @@ export function ProductReviewView({ brandId, catalogId, initialProducts }: Props
           </button>
           <button
             type="button"
+            onClick={() => {
+              const allVisibleIds = new Set(filteredProducts.map((p) => p.id))
+              const allSelected =
+                filteredProducts.length > 0 &&
+                filteredProducts.every((p) => selectedIds.has(p.id))
+              setSelectedIds(allSelected ? new Set() : allVisibleIds)
+            }}
+            className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+          >
+            {filteredProducts.length > 0 && filteredProducts.every((p) => selectedIds.has(p.id))
+              ? 'Desmarcar todos'
+              : 'Selecionar todos'}
+          </button>
+          <button
+            type="button"
             onClick={handleRetrigger}
             disabled={isPending}
             className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"

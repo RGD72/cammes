@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -50,8 +50,10 @@ export function ExtractionProgressView({ initialJob, brandId, catalogId }: Props
     })
   }
 
+  const supabaseRef = useRef(createSupabaseBrowserClient())
+
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient()
+    const supabase = supabaseRef.current
     const channel = supabase
       .channel(`job-${initialJob.id}`)
       .on(
@@ -73,6 +75,23 @@ export function ExtractionProgressView({ initialJob, brandId, catalogId }: Props
     }
   }, [initialJob.id])
 
+  // Polling fallback — Gemini processes the entire PDF in a single call so
+  // pages_processed doesn't increment; realtime only fires on actual DB changes.
+  useEffect(() => {
+    if (job.status !== 'running' && job.status !== 'queued') return
+    const supabase = supabaseRef.current
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from('extraction_jobs')
+        .select('*')
+        .eq('id', initialJob.id)
+        .single()
+      if (data) setJob(data as ExtractionJob)
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [job.status, initialJob.id])
+
+  const isActive = job.status === 'running' || job.status === 'queued'
   const progress = job.pages_total > 0 ? (job.pages_processed / job.pages_total) * 100 : 0
 
   return (
@@ -86,18 +105,31 @@ export function ExtractionProgressView({ initialJob, brandId, catalogId }: Props
 
       <div className="rounded-lg border p-6 space-y-5">
         <div>
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-foreground/60">Progresso</span>
-            <span className="font-medium">
-              {job.pages_processed} / {job.pages_total} páginas
-            </span>
-          </div>
-          <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full rounded-full bg-primary transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+          {isActive ? (
+            <div className="flex items-center gap-3 py-1">
+              <div className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <span className="text-sm text-foreground/60">
+                {job.status === 'queued'
+                  ? 'Aguardando slot de processamento…'
+                  : 'Enviando catálogo ao modelo de IA — pode levar alguns minutos…'}
+              </span>
+            </div>
+          ) : (
+            <div>
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-foreground/60">Progresso</span>
+                <span className="font-medium">
+                  {job.pages_processed} / {job.pages_total} páginas
+                </span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-6 text-sm">

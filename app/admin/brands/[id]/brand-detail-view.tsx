@@ -50,6 +50,21 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
 
       <div>
         <h2 className="text-base font-medium mb-3">Publicação da vitrine</h2>
+        <div className="mb-3">
+          <Link
+            href={`/brands/${brand.slug}`}
+            target="_blank"
+            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+          >
+            Visualizar vitrine
+            {!brand.published && (
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                preview
+              </span>
+            )}
+            <span aria-hidden>↗</span>
+          </Link>
+        </div>
         <BrandPublishToggle
           brandId={brand.id}
           initialPublished={brand.published}
