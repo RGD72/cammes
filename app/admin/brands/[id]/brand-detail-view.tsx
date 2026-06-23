@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { CatalogUploadZone } from '@/components/admin/catalog-upload-zone'
 import { ExtractionEstimateCard } from '@/components/admin/extraction-estimate-card'
 import { BrandPublishToggle } from '@/components/admin/brand-publish-toggle'
+import { DeleteCatalogButton } from '@/components/admin/delete-catalog-button'
+import { DeleteBrandButton } from '@/components/admin/delete-brand-button'
 import type { Brand } from '@/lib/brands/actions'
 import type { Catalog } from '@/lib/catalogs/actions'
 
@@ -29,6 +31,12 @@ interface Props {
 
 export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterKey, modelId, activeJobId, failedJobId, approvedCount, extractedCount }: Props) {
   const [catalog, setCatalog] = useState<Catalog | null>(initialCatalog)
+  const [published, setPublished] = useState(brand.published)
+
+  function handleCatalogDeleted() {
+    setCatalog(null)
+    setPublished(false)
+  }
 
   return (
     <div className="p-6 max-w-2xl space-y-8">
@@ -57,7 +65,7 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
             className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
           >
             Visualizar vitrine
-            {!brand.published && (
+            {!published && (
               <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
                 preview
               </span>
@@ -66,8 +74,9 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
           </Link>
         </div>
         <BrandPublishToggle
+          key={String(published)}
           brandId={brand.id}
-          initialPublished={brand.published}
+          initialPublished={published}
           approvedCount={approvedCount}
           extractedCount={extractedCount}
         />
@@ -76,11 +85,22 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
       <div>
         <h2 className="text-base font-medium mb-3">Catálogo PDF</h2>
 
-        <div className="mb-3 flex items-center gap-2">
-          <span className="text-sm text-foreground/60">Status:</span>
-          <span className="text-sm font-medium">
-            {catalog ? STATUS_LABELS[catalog.status] : 'Nenhum catálogo'}
-          </span>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-foreground/60">Status:</span>
+            <span className="text-sm font-medium">
+              {catalog ? STATUS_LABELS[catalog.status] : 'Nenhum catálogo'}
+            </span>
+          </div>
+          {catalog && (
+            <DeleteCatalogButton
+              catalogId={catalog.id}
+              brandId={brand.id}
+              disabled={Boolean(activeJobId) || catalog.status === 'processing'}
+              disabledReason="Aguarde a extração finalizar antes de excluir o catálogo."
+              onDeleted={handleCatalogDeleted}
+            />
+          )}
         </div>
 
         {catalog?.file_path && (
@@ -133,10 +153,21 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
           </div>
         )}
 
-        <CatalogUploadZone
-          brandId={brand.id}
-          onUploadComplete={(newCatalog) => setCatalog(newCatalog)}
-        />
+        {catalog ? (
+          <p className="text-xs text-foreground/50">
+            Exclua o catálogo atual para liberar o upload de um novo PDF.
+          </p>
+        ) : (
+          <CatalogUploadZone
+            brandId={brand.id}
+            onUploadComplete={(newCatalog) => setCatalog(newCatalog)}
+          />
+        )}
+      </div>
+
+      <div className="border-t pt-6">
+        <h2 className="text-base font-medium mb-3 text-red-700">Zona de perigo</h2>
+        <DeleteBrandButton brandId={brand.id} brandName={brand.name} published={published} />
       </div>
     </div>
   )

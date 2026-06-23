@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { logAuditEvent } from '@/lib/audit/log-event'
 
 export interface Catalog {
   id: string
@@ -89,6 +90,64 @@ export async function getCatalogSignedUrl(
   if (signError || !signedData) return { url: null, error: 'Erro ao gerar link de download.' }
 
   return { url: signedData.signedUrl, error: null }
+}
+
+export async function deleteCatalog(
+  catalogId: string,
+  brandId: string,
+): Promise<{ error: string | null }> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Usuário não autenticado.' }
+
+  const { data: brand } = await supabase
+    .from('brands')
+    .select('id, published')
+    .eq('id', brandId)
+    .eq('owner_admin_id', user.id)
+    .single()
+  if (!brand) return { error: 'Marca não encontrada ou acesso negado.' }
+
+  const { data: catalog } = await supabase
+    .from('catalogs')
+    .select('id, file_path')
+    .eq('id', catalogId)
+    .eq('brand_id', brandId)
+    .single()
+  if (!catalog) return { error: 'Catálogo não encontrado.' }
+
+  // CASCADE remove extraction_jobs e products vinculados. Se algum produto
+  // estiver em carrinho/pedido de cliente (cart_items/order_items ON DELETE
+  // RESTRICT), o delete falha com FK violation (23503) e nada é apagado.
+  const { error: deleteError } = await supabase
+    .from('catalogs')
+    .delete()
+    .eq('id', catalogId)
+
+  if (deleteError) {
+    if (deleteError.code === '23503') {
+      return {
+        error:
+          'Não é possível excluir: existem produtos deste catálogo em carrinhos ou pedidos de clientes.',
+      }
+    }
+    return { error: `Erro ao excluir catálogo: ${deleteError.message}` }
+  }
+
+  await supabase.storage.from('catalogs').remove([catalog.file_path])
+
+  if (brand.published) {
+    await supabase
+      .from('brands')
+      .update({ published: false, published_at: null, updated_at: new Date().toISOString() })
+      .eq('id', brandId)
+  }
+
+  await logAuditEvent('catalog_deleted', { catalogId, brandId, adminId: user.id })
+
+  return { error: null }
 }
 
 export async function checkUploadRateLimit(): Promise<RateLimitResult> {

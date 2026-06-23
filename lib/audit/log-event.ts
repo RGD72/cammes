@@ -10,6 +10,8 @@ export type AuditEventType =
   | 'openrouter_key_updated'
   | 'brand_published'
   | 'brand_unpublished'
+  | 'brand_deleted'
+  | 'catalog_deleted'
   | 'extraction_started'
   | 'extraction_completed'
   | 'extraction_failed'

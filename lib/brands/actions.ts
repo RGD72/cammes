@@ -132,6 +132,54 @@ export async function getBrandBySlug(slug: string): Promise<Brand | null> {
   return data as Brand
 }
 
+export async function deleteBrand(brandId: string): Promise<{ error: string | null }> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Usuário não autenticado.' }
+
+  const { data: brand } = await supabase
+    .from('brands')
+    .select('id, name, published')
+    .eq('id', brandId)
+    .eq('owner_admin_id', user.id)
+    .single()
+  if (!brand) return { error: 'Marca não encontrada ou acesso negado.' }
+
+  if (brand.published) {
+    return { error: 'Despublique a vitrine antes de excluir a marca.' }
+  }
+
+  // Capturar paths dos arquivos de catálogo antes do CASCADE apagar as linhas
+  const { data: catalogs } = await supabase
+    .from('catalogs')
+    .select('file_path')
+    .eq('brand_id', brandId)
+
+  // CASCADE remove catalogs, products, extraction_jobs e user_brand_access.
+  // orders.brand_id é ON DELETE RESTRICT — se houver pedidos registrados,
+  // o delete falha com FK violation (23503) e nada é apagado.
+  const { error: deleteError } = await supabase.from('brands').delete().eq('id', brandId)
+
+  if (deleteError) {
+    if (deleteError.code === '23503') {
+      return { error: 'Não é possível excluir: existem pedidos registrados para esta marca.' }
+    }
+    return { error: `Erro ao excluir marca: ${deleteError.message}` }
+  }
+
+  if (catalogs && catalogs.length > 0) {
+    await supabase.storage.from('catalogs').remove(catalogs.map((c) => c.file_path))
+  }
+
+  await logAuditEvent('brand_deleted', { brandId, brandName: brand.name, adminId: user.id })
+
+  revalidateTag(`kpis:admin:${user.id}`)
+
+  return { error: null }
+}
+
 export async function toggleBrandPublished(
   brandId: string,
   published: boolean,
