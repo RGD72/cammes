@@ -57,7 +57,7 @@ export async function getApprovedProductsForStorefront(brandId: string): Promise
 export async function updateProduct(
   productId: string,
   brandId: string,
-  data: Partial<Pick<Product, 'reference' | 'description' | 'price_brl' | 'look_group'>>,
+  data: Partial<Pick<Product, 'reference' | 'description' | 'price_brl' | 'look_group' | 'sizes' | 'colors'>>,
 ): Promise<{ product: Product | null; error: string | null }> {
   const supabase = await createServerSupabaseClient()
   const {
@@ -83,6 +83,42 @@ export async function updateProduct(
 
   if (error) return { product: null, error: error.message }
   return { product: updated as Product, error: null }
+}
+
+export async function deleteProduct(
+  productId: string,
+  brandId: string,
+): Promise<{ error: string | null }> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Usuário não autenticado.' }
+
+  const { data: existing } = await supabase
+    .from('products')
+    .select('id')
+    .eq('id', productId)
+    .eq('brand_id', brandId)
+    .single()
+
+  if (!existing) return { error: 'Produto não encontrado ou acesso negado.' }
+
+  // cart_items.product_id é ON DELETE RESTRICT — se o produto estiver em um
+  // carrinho de cliente, o delete falha com FK violation (23503).
+  const { error } = await supabase.from('products').delete().eq('id', productId)
+
+  if (error) {
+    if (error.code === '23503') {
+      return {
+        error:
+          'Não é possível excluir: o produto está em um carrinho de cliente. Oculte-o em vez de excluir, ou aguarde a finalização do pedido.',
+      }
+    }
+    return { error: `Erro ao excluir produto: ${error.message}` }
+  }
+
+  return { error: null }
 }
 
 export async function bulkUpdateProductStatus(

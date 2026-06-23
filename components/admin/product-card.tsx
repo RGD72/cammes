@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { updateProduct } from '@/lib/products/actions'
+import { updateProduct, deleteProduct } from '@/lib/products/actions'
+import { TagListEditor } from '@/components/admin/tag-list-editor'
 import type { Product } from '@/lib/products/actions'
 
 function getConfidenceLevel(
@@ -86,6 +87,7 @@ interface ProductCardProps {
   availableLooks: string[]
   onToggleSelect: () => void
   onProductUpdate: (updated: Product) => void
+  onProductDelete?: (productId: string) => void
   onError: (msg: string) => void
   onSuccess?: (msg: string) => void
 }
@@ -96,10 +98,13 @@ export function ProductCard({
   availableLooks,
   onToggleSelect,
   onProductUpdate,
+  onProductDelete,
   onError,
   onSuccess,
 }: ProductCardProps) {
   const [localProduct, setLocalProduct] = useState(product)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [isDeleting, startDeleteTransition] = useTransition()
   const confidenceLevel = getConfidenceLevel(localProduct.extraction_confidence)
 
   async function handleSave(
@@ -133,6 +138,39 @@ export function ProductCard({
       onProductUpdate(result.product)
       if (field === 'look_group') onSuccess?.('LOOK atualizado')
     }
+  }
+
+  async function handleSaveTags(field: 'sizes' | 'colors', values: string[]) {
+    const previous = localProduct
+    const optimistic = { ...localProduct, [field]: values }
+    setLocalProduct(optimistic)
+    onProductUpdate(optimistic)
+
+    const result = await updateProduct(localProduct.id, localProduct.brand_id, {
+      [field]: values,
+    })
+
+    if (result.error) {
+      setLocalProduct(previous)
+      onProductUpdate(previous)
+      onError(result.error)
+    } else if (result.product) {
+      setLocalProduct(result.product)
+      onProductUpdate(result.product)
+    }
+  }
+
+  function handleConfirmDelete() {
+    startDeleteTransition(async () => {
+      const result = await deleteProduct(localProduct.id, localProduct.brand_id)
+      if (result.error) {
+        onError(result.error)
+        setConfirmingDelete(false)
+        return
+      }
+      onProductDelete?.(localProduct.id)
+      onSuccess?.('Produto excluído')
+    })
   }
 
   return (
@@ -213,37 +251,19 @@ export function ProductCard({
           />
         </div>
 
-        {localProduct.sizes && localProduct.sizes.length > 0 && (
-          <div>
-            <p className="text-xs text-foreground/50 mb-1">Tamanhos</p>
-            <div className="flex flex-wrap gap-1">
-              {localProduct.sizes.map((s) => (
-                <span
-                  key={s}
-                  className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground/70"
-                >
-                  {s}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+        <TagListEditor
+          label="Tamanhos"
+          values={localProduct.sizes ?? []}
+          onChange={(next) => handleSaveTags('sizes', next)}
+          placeholder="Ex: P, M, G…"
+        />
 
-        {localProduct.colors && localProduct.colors.length > 0 && (
-          <div>
-            <p className="text-xs text-foreground/50 mb-1">Cores</p>
-            <div className="flex flex-wrap gap-1">
-              {localProduct.colors.map((c) => (
-                <span
-                  key={c}
-                  className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground/70"
-                >
-                  {c}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+        <TagListEditor
+          label="Cores"
+          values={localProduct.colors ?? []}
+          onChange={(next) => handleSaveTags('colors', next)}
+          placeholder="Ex: Preto, Branco…"
+        />
 
         <div>
           <p className="text-xs text-foreground/50 mb-0.5">LOOK</p>
@@ -259,7 +279,7 @@ export function ProductCard({
           </datalist>
         </div>
 
-        <div className="mt-auto pt-1">
+        <div className="mt-auto flex items-center justify-between gap-2 pt-1">
           <span
             className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
               localProduct.status === 'approved'
@@ -275,8 +295,50 @@ export function ProductCard({
                 ? 'Oculto'
                 : 'Extraído'}
           </span>
+          <button
+            type="button"
+            onClick={() => setConfirmingDelete(true)}
+            className="rounded px-1.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50"
+          >
+            Excluir
+          </button>
         </div>
       </div>
+
+      {confirmingDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="relative w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-base font-semibold">Excluir produto</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {localProduct.reference || localProduct.description || 'Este produto'} será removido
+              permanentemente, incluindo da vitrine se estiver aprovado. Esta ação não pode ser
+              desfeita.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={isDeleting}
+                className="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {isDeleting ? 'Excluindo…' : 'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

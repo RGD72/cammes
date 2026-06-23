@@ -40,6 +40,7 @@ interface SortableProductCardProps {
   availableLooks: string[]
   onToggleSelect: () => void
   onProductUpdate: (updated: Product) => void
+  onProductDelete: (productId: string) => void
   onError: (msg: string) => void
   onSuccess: (msg: string) => void
 }
@@ -50,6 +51,7 @@ function SortableProductCard({
   availableLooks,
   onToggleSelect,
   onProductUpdate,
+  onProductDelete,
   onError,
   onSuccess,
 }: SortableProductCardProps) {
@@ -72,6 +74,7 @@ function SortableProductCard({
         availableLooks={availableLooks}
         onToggleSelect={onToggleSelect}
         onProductUpdate={onProductUpdate}
+        onProductDelete={onProductDelete}
         onError={onError}
         onSuccess={onSuccess}
       />
@@ -168,6 +171,16 @@ export function ProductReviewView({ brandId, catalogId, initialProducts }: Props
 
   function handleProductUpdate(updated: Product) {
     setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+  }
+
+  function handleProductDelete(productId: string) {
+    setProducts((prev) => prev.filter((p) => p.id !== productId))
+    setSelectedIds((prev) => {
+      if (!prev.has(productId)) return prev
+      const next = new Set(prev)
+      next.delete(productId)
+      return next
+    })
   }
 
   function handleBulkAction(status: 'approved' | 'hidden') {
@@ -347,6 +360,7 @@ export function ProductReviewView({ brandId, catalogId, initialProducts }: Props
                   availableLooks={availableLooks}
                   onToggleSelect={() => handleToggleSelect(product.id)}
                   onProductUpdate={handleProductUpdate}
+                  onProductDelete={handleProductDelete}
                   onError={showError}
                   onSuccess={showSuccess}
                 />
@@ -387,6 +401,7 @@ export function ProductReviewView({ brandId, catalogId, initialProducts }: Props
                       availableLooks={availableLooks}
                       onToggleSelect={() => handleToggleSelect(product.id)}
                       onProductUpdate={handleProductUpdate}
+                      onProductDelete={handleProductDelete}
                       onError={showError}
                       onSuccess={showSuccess}
                     />
