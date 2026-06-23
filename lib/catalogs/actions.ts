@@ -26,6 +26,25 @@ export interface RateLimitResult {
 
 const UPLOAD_RATE_LIMIT = 3
 
+// Removes rendered page images (catalogs/{brandId}/{catalogId}/pages/*) —
+// best-effort, never throws, since it's cleanup after a delete that already
+// succeeded at the DB level.
+export async function removeCatalogPageImages(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  brandId: string,
+  catalogId: string,
+) {
+  try {
+    const prefix = `${brandId}/${catalogId}/pages`
+    const { data: files } = await supabase.storage.from('catalogs').list(prefix, { limit: 1000 })
+    if (files && files.length > 0) {
+      await supabase.storage.from('catalogs').remove(files.map((f) => `${prefix}/${f.name}`))
+    }
+  } catch (err) {
+    console.error('[deleteCatalog] failed to remove page images:', err)
+  }
+}
+
 export async function createCatalogRecord(data: {
   brandId: string
   filePath: string
@@ -137,6 +156,7 @@ export async function deleteCatalog(
   }
 
   await supabase.storage.from('catalogs').remove([catalog.file_path])
+  await removeCatalogPageImages(supabase, brandId, catalogId)
 
   if (brand.published) {
     await supabase

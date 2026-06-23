@@ -5,6 +5,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { getCatalogStoragePath } from '@/lib/supabase/storage'
 import { createCatalogRecord, checkUploadRateLimit, type Catalog } from '@/lib/catalogs/actions'
 import { countPdfPagesAndUpdateStatus } from '@/lib/catalogs/page-count'
+import { renderAndUploadCatalogPages } from '@/lib/catalogs/render-pdf-pages'
 
 const MAX_SIZE_BYTES = 500 * 1024 * 1024 // 500 MB
 const ALLOWED_MIME = 'application/pdf'
@@ -95,6 +96,7 @@ export function CatalogUploadZone({ brandId, onUploadComplete }: Props) {
   const [uploadState, setUploadState] = useState<UploadState>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [imageProgress, setImageProgress] = useState<{ current: number; total: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   async function handleFile(file: File) {
@@ -156,6 +158,19 @@ export function CatalogUploadZone({ brandId, onUploadComplete }: Props) {
       const updatedCatalog: Catalog = pageCount !== null
         ? { ...catalog, page_count: pageCount, status: 'awaiting_extraction' }
         : catalog
+
+      // Gera imagens de cada página (best-effort) para a vitrine exibir fotos
+      // dos produtos. Falha aqui não bloqueia o fluxo — extração segue sem imagens.
+      try {
+        await renderAndUploadCatalogPages(file, brandId, catalog.id, (p) =>
+          setImageProgress(p),
+        )
+      } catch (renderErr) {
+        console.error('[CatalogUpload] geração de imagens das páginas falhou:', renderErr)
+      } finally {
+        setImageProgress(null)
+      }
+
       onUploadComplete?.(updatedCatalog)
     })
   }
@@ -173,7 +188,7 @@ export function CatalogUploadZone({ brandId, onUploadComplete }: Props) {
     e.target.value = ''
   }
 
-  const isLoading = uploadState === 'uploading' || isPending
+  const isLoading = uploadState === 'uploading' || isPending || imageProgress !== null
 
   return (
     <div className="space-y-3">
@@ -200,7 +215,11 @@ export function CatalogUploadZone({ brandId, onUploadComplete }: Props) {
           aria-hidden="true"
         />
         <p className="text-sm font-medium">
-          {isLoading ? 'Fazendo upload...' : 'Arraste um PDF aqui ou clique para selecionar'}
+          {imageProgress
+            ? 'Gerando imagens das páginas...'
+            : isLoading
+              ? 'Fazendo upload...'
+              : 'Arraste um PDF aqui ou clique para selecionar'}
         </p>
         <p className="mt-1 text-xs text-foreground/50">Apenas .pdf · Máximo 500MB</p>
       </div>
@@ -214,6 +233,20 @@ export function CatalogUploadZone({ brandId, onUploadComplete }: Props) {
             />
           </div>
           <p className="text-xs text-foreground/50 text-right">{progress}%</p>
+        </div>
+      )}
+
+      {imageProgress && (
+        <div className="space-y-1">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-foreground transition-all duration-300"
+              style={{ width: `${Math.round((imageProgress.current / imageProgress.total) * 100)}%` }}
+            />
+          </div>
+          <p className="text-xs text-foreground/50 text-right">
+            Página {imageProgress.current} de {imageProgress.total}
+          </p>
         </div>
       )}
 

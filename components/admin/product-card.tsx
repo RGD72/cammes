@@ -134,8 +134,11 @@ export function ProductCard({
       onProductUpdate(previous)
       onError(result.error)
     } else if (result.product) {
-      setLocalProduct(result.product)
-      onProductUpdate(result.product)
+      // updateProduct() returns the raw storage path, not the signed URL we
+      // originally received — keep the signed one so the image keeps loading.
+      const merged = { ...result.product, image_crop_url: previous.image_crop_url }
+      setLocalProduct(merged)
+      onProductUpdate(merged)
       if (field === 'look_group') onSuccess?.('LOOK atualizado')
     }
   }
@@ -155,8 +158,9 @@ export function ProductCard({
       onProductUpdate(previous)
       onError(result.error)
     } else if (result.product) {
-      setLocalProduct(result.product)
-      onProductUpdate(result.product)
+      const merged = { ...result.product, image_crop_url: previous.image_crop_url }
+      setLocalProduct(merged)
+      onProductUpdate(merged)
     }
   }
 

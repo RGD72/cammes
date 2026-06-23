@@ -3,6 +3,7 @@
 import { revalidateTag } from 'next/cache'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { logAuditEvent } from '@/lib/audit/log-event'
+import { removeCatalogPageImages } from '@/lib/catalogs/actions'
 
 export interface Brand {
   id: string
@@ -154,7 +155,7 @@ export async function deleteBrand(brandId: string): Promise<{ error: string | nu
   // Capturar paths dos arquivos de catálogo antes do CASCADE apagar as linhas
   const { data: catalogs } = await supabase
     .from('catalogs')
-    .select('file_path')
+    .select('id, file_path')
     .eq('brand_id', brandId)
 
   // CASCADE remove catalogs, products, extraction_jobs e user_brand_access.
@@ -171,6 +172,7 @@ export async function deleteBrand(brandId: string): Promise<{ error: string | nu
 
   if (catalogs && catalogs.length > 0) {
     await supabase.storage.from('catalogs').remove(catalogs.map((c) => c.file_path))
+    await Promise.all(catalogs.map((c) => removeCatalogPageImages(supabase, brandId, c.id)))
   }
 
   await logAuditEvent('brand_deleted', { brandId, brandName: brand.name, adminId: user.id })

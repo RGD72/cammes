@@ -2,7 +2,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { z } from 'npm:zod@3'
 
 // PDF sent natively to Gemini Flash 2.5 via OpenRouter's document content type.
-// No page rendering library needed — the model processes all pages in a single call.
+// No page rendering library needed here — the model processes all pages in a
+// single call. Page images (for image_crop_url) are rendered client-side at
+// upload time (lib/catalogs/render-pdf-pages.ts) and just looked up below.
 
 // Global handlers ensure any rejection that escapes processExtraction's internal
 // try/catch (e.g. failed DB update inside the catch block, or a throw before the
@@ -178,6 +180,22 @@ async function processExtraction(payload: {
     }
 
     if (products.length > 0) {
+      // Página renderizada client-side no upload (ver render-pdf-pages.ts) e
+      // armazenada em {brandId}/{catalogId}/pages/page-{n}.jpg. Lista o que
+      // existe de fato — best-effort, nunca bloqueia a extração se faltar.
+      const availablePages = new Set<number>()
+      try {
+        const { data: pageFiles } = await supabase.storage
+          .from('catalogs')
+          .list(`${brandId}/${catalogId}/pages`, { limit: 1000 })
+        for (const file of pageFiles ?? []) {
+          const match = /^page-(\d+)\.jpg$/.exec(file.name)
+          if (match) availablePages.add(parseInt(match[1], 10))
+        }
+      } catch (listErr) {
+        console.error('[extract-catalog] failed to list page images:', listErr)
+      }
+
       const rows = products.map((p) => ({
         brand_id: brandId,
         catalog_id: catalogId,
@@ -189,6 +207,10 @@ async function processExtraction(payload: {
         price_brl: p.price_brl ?? null,
         look_group: p.look_group ?? null,
         source_page: p.source_page ?? null,
+        image_crop_url:
+          p.source_page && availablePages.has(p.source_page)
+            ? `${brandId}/${catalogId}/pages/page-${p.source_page}.jpg`
+            : null,
       }))
       // Idempotent upsert: ON CONFLICT (extraction_job_id, source_page, reference) DO NOTHING
       // Requires a non-partial unique index — see migration fix_products_upsert_index.

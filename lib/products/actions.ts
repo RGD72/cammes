@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleSupabaseClient } from '@/lib/supabase/admin'
 
 export interface Product {
   id: string
@@ -22,6 +23,31 @@ export interface Product {
   updated_at: string
 }
 
+const IMAGE_SIGNED_URL_TTL_SECONDS = 3600
+
+// products.image_crop_url stores a storage path (not a URL), since the
+// `catalogs` bucket is private. RLS on the `products` table already decides
+// who may see a given row; signing here just lets the browser load the
+// image the row already grants access to — it never widens access.
+async function attachSignedImageUrls(products: Product[]): Promise<Product[]> {
+  const paths = [...new Set(products.map((p) => p.image_crop_url).filter((p): p is string => Boolean(p)))]
+  if (paths.length === 0) return products
+
+  const supabase = createServiceRoleSupabaseClient()
+  const { data, error } = await supabase.storage
+    .from('catalogs')
+    .createSignedUrls(paths, IMAGE_SIGNED_URL_TTL_SECONDS)
+
+  if (error || !data) return products
+
+  const urlByPath = new Map(data.map((d) => [d.path, d.signedUrl] as const))
+
+  return products.map((p) => ({
+    ...p,
+    image_crop_url: p.image_crop_url ? urlByPath.get(p.image_crop_url) ?? null : null,
+  }))
+}
+
 export async function getProductsForReview(brandId: string): Promise<Product[]> {
   const supabase = await createServerSupabaseClient()
   const {
@@ -37,7 +63,7 @@ export async function getProductsForReview(brandId: string): Promise<Product[]> 
     .order('created_at', { ascending: true })
 
   if (error) return []
-  return (data ?? []) as Product[]
+  return attachSignedImageUrls((data ?? []) as Product[])
 }
 
 export async function getApprovedProductsForStorefront(brandId: string): Promise<Product[]> {
@@ -51,7 +77,7 @@ export async function getApprovedProductsForStorefront(brandId: string): Promise
     .order('created_at', { ascending: true })
 
   if (error) return []
-  return (data ?? []) as Product[]
+  return attachSignedImageUrls((data ?? []) as Product[])
 }
 
 export async function updateProduct(
