@@ -131,9 +131,10 @@ export async function inviteCustomer(input: {
 
   const adminClient = createServiceRoleSupabaseClient()
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+  const email = input.email.trim().toLowerCase()
 
   const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-    input.email,
+    email,
     {
       data: { full_name: input.fullName },
       redirectTo: `${siteUrl}/auth/callback`,
@@ -152,7 +153,7 @@ export async function inviteCustomer(input: {
     const { data: existingProfile } = await adminClient
       .from('users_profile')
       .select('id')
-      .eq('email', input.email)
+      .eq('email', email)
       .maybeSingle()
     if (existingProfile) {
       return conflictError('E-mail já cadastrado.')
@@ -162,9 +163,7 @@ export async function inviteCustomer(input: {
       perPage: 1000,
     })
     if (listError) return internalError(listError.message)
-    const orphan = listData.users.find(
-      (u) => u.email?.toLowerCase() === input.email.toLowerCase(),
-    )
+    const orphan = listData.users.find((u) => u.email?.toLowerCase() === email)
     if (!orphan) return conflictError('E-mail já cadastrado.')
     invitedUserId = orphan.id
   } else {
@@ -177,7 +176,7 @@ export async function inviteCustomer(input: {
       id: invitedUserId,
       role: 'customer',
       full_name: input.fullName,
-      email: input.email,
+      email,
       phone: input.phone?.trim() || null,
       is_active: true,
     },
@@ -206,7 +205,7 @@ export async function inviteCustomer(input: {
   }
 
   await logAuditEvent('customer_invited', {
-    email: input.email,
+    email,
     brandIds,
     invitedBy: user.id,
   })

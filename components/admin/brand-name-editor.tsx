@@ -26,11 +26,11 @@ export function BrandNameEditor({ brandId, name, onUpdated, onError }: Props) {
       const result = await updateBrand(brandId, { name: trimmed })
       if (result.error) {
         onError(result.error)
-        setDraft(name)
       } else if (result.brand) {
+        setDraft(result.brand.name)
         onUpdated(result.brand.name)
+        setEditing(false)
       }
-      setEditing(false)
     })
   }
 
@@ -60,8 +60,13 @@ export function BrandNameEditor({ brandId, name, onUpdated, onError }: Props) {
     <h1
       role="button"
       tabIndex={0}
-      onClick={() => setEditing(true)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setEditing(true) }}
+      onClick={() => { if (!isPending) setEditing(true) }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          if (!isPending) setEditing(true)
+        }
+      }}
       className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 text-xl font-semibold hover:bg-muted"
       title="Clique para editar o nome da marca"
     >

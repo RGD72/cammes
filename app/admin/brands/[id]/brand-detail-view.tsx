@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { CatalogUploadZone } from '@/components/admin/catalog-upload-zone'
 import { ExtractionEstimateCard } from '@/components/admin/extraction-estimate-card'
@@ -35,6 +35,7 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
   const [published, setPublished] = useState(brand.published)
   const [brandName, setBrandName] = useState(brand.name)
   const [toast, setToast] = useState<string | null>(null)
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function handleCatalogDeleted() {
     setCatalog(null)
@@ -42,8 +43,9 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
   }
 
   function showError(msg: string) {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current)
     setToast(msg)
-    setTimeout(() => setToast(null), 4000)
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 4000)
   }
 
   return (
@@ -184,7 +186,11 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
       </div>
 
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 rounded-lg border border-red-200 bg-red-50 px-4 py-3 shadow-lg">
+        <div
+          role="alert"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-50 rounded-lg border border-red-200 bg-red-50 px-4 py-3 shadow-lg"
+        >
           <p className="text-sm text-red-700">{toast}</p>
         </div>
       )}

@@ -10,7 +10,7 @@ export function formatPriceInputBRL(value: number): string {
 // o input editável sempre exibe/recebe valores nesse formato.
 export function parsePriceInputBRL(raw: string): number | null {
   const normalized = raw.trim().replace(/\./g, '').replace(',', '.')
-  if (normalized === '') return null
+  if (normalized === '' || !/^\d+(\.\d+)?$/.test(normalized)) return null
   const parsed = parseFloat(normalized)
   return isNaN(parsed) ? null : parsed
 }
