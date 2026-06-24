@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { updateBrand } from '@/lib/brands/actions'
 
 interface Props {
@@ -15,6 +15,10 @@ export function BrandNameEditor({ brandId, name, onUpdated, onError }: Props) {
   const [draft, setDraft] = useState(name)
   const [isPending, startTransition] = useTransition()
 
+  useEffect(() => {
+    if (!editing) setDraft(name)
+  }, [name, editing])
+
   function commit() {
     const trimmed = draft.trim()
     if (!trimmed || trimmed === name) {
@@ -23,13 +27,17 @@ export function BrandNameEditor({ brandId, name, onUpdated, onError }: Props) {
       return
     }
     startTransition(async () => {
-      const result = await updateBrand(brandId, { name: trimmed })
-      if (result.error) {
-        onError(result.error)
-      } else if (result.brand) {
-        setDraft(result.brand.name)
-        onUpdated(result.brand.name)
-        setEditing(false)
+      try {
+        const result = await updateBrand(brandId, { name: trimmed })
+        if (result.error) {
+          onError(result.error)
+        } else if (result.brand) {
+          setDraft(result.brand.name)
+          onUpdated(result.brand.name)
+          setEditing(false)
+        }
+      } catch (err) {
+        onError(err instanceof Error ? err.message : 'Erro ao atualizar marca.')
       }
     })
   }
@@ -57,7 +65,7 @@ export function BrandNameEditor({ brandId, name, onUpdated, onError }: Props) {
   }
 
   return (
-    <h1
+    <div
       role="button"
       tabIndex={0}
       onClick={() => { if (!isPending) setEditing(true) }}
@@ -67,11 +75,11 @@ export function BrandNameEditor({ brandId, name, onUpdated, onError }: Props) {
           if (!isPending) setEditing(true)
         }
       }}
-      className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 text-xl font-semibold hover:bg-muted"
+      className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 hover:bg-muted"
       title="Clique para editar o nome da marca"
     >
-      {name}
+      <h1 className="text-xl font-semibold">{name}</h1>
       <span className="text-foreground/30 text-sm" aria-hidden>✎</span>
-    </h1>
+    </div>
   )
 }
