@@ -133,6 +133,35 @@ export async function getBrandBySlug(slug: string): Promise<Brand | null> {
   return data as Brand
 }
 
+export async function updateBrand(
+  brandId: string,
+  data: { name: string },
+): Promise<BrandActionResult> {
+  const name = data.name.trim()
+  if (!name) return { brand: null, error: 'Nome da marca é obrigatório.' }
+
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { brand: null, error: 'Usuário não autenticado.' }
+
+  const { data: brand, error } = await supabase
+    .from('brands')
+    .update({ name, updated_at: new Date().toISOString() })
+    .eq('id', brandId)
+    .eq('owner_admin_id', user.id)
+    .select()
+    .single()
+
+  if (error) return { brand: null, error: `Erro ao atualizar marca: ${error.message}` }
+  if (!brand) return { brand: null, error: 'Marca não encontrada ou acesso negado.' }
+
+  await logAuditEvent('brand_updated', { brandId, adminId: user.id, name })
+
+  return { brand: brand as Brand, error: null }
+}
+
 export async function deleteBrand(brandId: string): Promise<{ error: string | null }> {
   const supabase = await createServerSupabaseClient()
   const {

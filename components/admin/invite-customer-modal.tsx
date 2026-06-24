@@ -4,16 +4,7 @@ import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { inviteCustomer } from '@/lib/customers/actions'
 
-interface Brand {
-  id: string
-  name: string
-}
-
-interface Props {
-  brands: Brand[]
-}
-
-export function InviteCustomerModal({ brands }: Props) {
+export function InviteCustomerModal() {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -36,7 +27,7 @@ export function InviteCustomerModal({ brands }: Props) {
     const fd = new FormData(e.currentTarget)
     const email = (fd.get('email') as string).trim()
     const fullName = (fd.get('fullName') as string).trim()
-    const brandIds = fd.getAll('brandIds') as string[]
+    const phone = (fd.get('phone') as string).trim()
 
     if (!email || !fullName) {
       setError('E-mail e nome são obrigatórios.')
@@ -45,7 +36,7 @@ export function InviteCustomerModal({ brands }: Props) {
 
     setError(null)
     startTransition(async () => {
-      const result = await inviteCustomer({ email, fullName, brandIds })
+      const result = await inviteCustomer({ email, fullName, phone: phone || undefined })
       if (!result.ok) {
         setError(result.error.message)
         return
@@ -98,19 +89,23 @@ export function InviteCustomerModal({ brands }: Props) {
                 />
               </div>
 
-              {brands.length > 0 && (
-                <fieldset>
-                  <legend className="mb-1 text-sm font-medium">Marcas</legend>
-                  <div className="max-h-40 space-y-1 overflow-y-auto rounded border p-2">
-                    {brands.map((b) => (
-                      <label key={b.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                        <input type="checkbox" name="brandIds" value={b.id} />
-                        {b.name}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              )}
+              <div>
+                <label className="mb-1 block text-sm font-medium" htmlFor="invite-phone">
+                  Telefone <span className="text-foreground/50">(opcional)</span>
+                </label>
+                <input
+                  id="invite-phone"
+                  name="phone"
+                  type="tel"
+                  className="w-full rounded border bg-background px-3 py-2 text-sm"
+                  placeholder="(11) 91234-5678"
+                />
+              </div>
+
+              <p className="text-xs text-foreground/50">
+                O cliente terá acesso a todas as suas marcas. É possível restringir o acesso a marcas
+                específicas depois, na página do cliente.
+              </p>
 
               {error && <p className="text-sm text-destructive">{error}</p>}
 

@@ -19,7 +19,7 @@ export default async function CustomerDetailPage({
   const [profileResult, brandsResult, accessResult, deletionResult] = await Promise.all([
     supabase
       .from('users_profile')
-      .select('id, full_name, email, is_active')
+      .select('id, full_name, email, phone, is_active')
       .eq('id', id)
       .eq('role', 'customer')
       .single(),
@@ -87,6 +87,9 @@ export default async function CustomerDetailPage({
         <div>
           <h1 className="text-xl font-semibold">{profile.full_name}</h1>
           <p className="text-sm text-muted-foreground">{profile.email}</p>
+          {profile.phone && (
+            <p className="text-sm text-muted-foreground">{profile.phone}</p>
+          )}
         </div>
         <span
           className={`rounded-full px-2 py-0.5 text-xs ${

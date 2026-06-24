@@ -7,6 +7,7 @@ import { ExtractionEstimateCard } from '@/components/admin/extraction-estimate-c
 import { BrandPublishToggle } from '@/components/admin/brand-publish-toggle'
 import { DeleteCatalogButton } from '@/components/admin/delete-catalog-button'
 import { DeleteBrandButton } from '@/components/admin/delete-brand-button'
+import { BrandNameEditor } from '@/components/admin/brand-name-editor'
 import type { Brand } from '@/lib/brands/actions'
 import type { Catalog } from '@/lib/catalogs/actions'
 
@@ -32,16 +33,28 @@ interface Props {
 export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterKey, modelId, activeJobId, failedJobId, approvedCount, extractedCount }: Props) {
   const [catalog, setCatalog] = useState<Catalog | null>(initialCatalog)
   const [published, setPublished] = useState(brand.published)
+  const [brandName, setBrandName] = useState(brand.name)
+  const [toast, setToast] = useState<string | null>(null)
 
   function handleCatalogDeleted() {
     setCatalog(null)
     setPublished(false)
   }
 
+  function showError(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 4000)
+  }
+
   return (
     <div className="p-6 max-w-2xl space-y-8">
       <div>
-        <h1 className="text-xl font-semibold">{brand.name}</h1>
+        <BrandNameEditor
+          brandId={brand.id}
+          name={brandName}
+          onUpdated={setBrandName}
+          onError={showError}
+        />
         <p className="text-sm text-foreground/50 font-mono">/{brand.slug}</p>
         {brand.description && (
           <p className="mt-2 text-sm text-foreground/70">{brand.description}</p>
@@ -50,7 +63,7 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={brand.logo_url}
-            alt={`Logo de ${brand.name}`}
+            alt={`Logo de ${brandName}`}
             className="mt-3 h-12 w-auto object-contain"
           />
         )}
@@ -60,7 +73,7 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
         <h2 className="text-base font-medium mb-3">Publicação da vitrine</h2>
         <div className="mb-3">
           <Link
-            href={`/brands/${brand.slug}`}
+            href={`/admin/brands/${brand.id}/preview`}
             target="_blank"
             className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
           >
@@ -167,8 +180,14 @@ export function BrandDetailView({ brand, catalog: initialCatalog, hasOpenRouterK
 
       <div className="border-t pt-6">
         <h2 className="text-base font-medium mb-3 text-red-700">Zona de perigo</h2>
-        <DeleteBrandButton brandId={brand.id} brandName={brand.name} published={published} />
+        <DeleteBrandButton brandId={brand.id} brandName={brandName} published={published} />
       </div>
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-lg border border-red-200 bg-red-50 px-4 py-3 shadow-lg">
+          <p className="text-sm text-red-700">{toast}</p>
+        </div>
+      )}
     </div>
   )
 }

@@ -149,12 +149,18 @@ describe('listAdminCustomers', () => {
 // ---- inviteCustomer ---------------------------------------------------------
 
 describe('inviteCustomer', () => {
-  it('P-CUST-2: chama inviteUserByEmail com e-mail e redirectTo corretos', async () => {
+  it('P-CUST-2: chama inviteUserByEmail e concede acesso a todas as marcas do admin por padrão', async () => {
+    const brandAccessUpsert = vi.fn().mockResolvedValue({ data: null, error: null })
     const serverClient = {
       auth: { getUser: vi.fn().mockResolvedValue(makeAuthUser()) },
-      from: vi.fn().mockReturnValue({
-        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
-        upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'brands') {
+          return { select: vi.fn().mockResolvedValue({ data: MOCK_BRANDS, error: null }) }
+        }
+        if (table === 'user_brand_access') {
+          return { upsert: brandAccessUpsert }
+        }
+        return makeChain({ data: null, error: null })
       }),
     }
 
@@ -162,23 +168,128 @@ describe('inviteCustomer', () => {
       data: { user: { id: CUSTOMER_ID } },
       error: null,
     })
-
+    const usersProfileTable = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }
     const adminClient = {
-      auth: { admin: { inviteUserByEmail } },
-      from: vi.fn().mockReturnValue({
-        upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
-      }),
+      auth: { admin: { inviteUserByEmail, listUsers: vi.fn() } },
+      from: vi.fn().mockImplementation((table: string) =>
+        table === 'users_profile' ? usersProfileTable : { upsert: vi.fn() },
+      ),
     }
 
     vi.mocked(createServerSupabaseClient).mockResolvedValue(serverClient as never)
     vi.mocked(createServiceRoleSupabaseClient).mockReturnValue(adminClient as never)
 
-    await inviteCustomer({ email: 'ana@loja.com', fullName: 'Ana Silva', brandIds: [BRAND_ID_A] })
+    const result = await inviteCustomer({
+      email: 'ana@loja.com',
+      fullName: 'Ana Silva',
+      phone: '11999999999',
+    })
 
     expect(inviteUserByEmail).toHaveBeenCalledOnce()
     const [emailArg, opts] = inviteUserByEmail.mock.calls[0]
     expect(emailArg).toBe('ana@loja.com')
     expect(opts.redirectTo).toContain('/auth/callback')
+
+    expect(usersProfileTable.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ id: CUSTOMER_ID, phone: '11999999999' }),
+      { onConflict: 'id' },
+    )
+
+    expect(brandAccessUpsert).toHaveBeenCalledOnce()
+    const [rows] = brandAccessUpsert.mock.calls[0]
+    expect(rows.map((r: { brand_id: string }) => r.brand_id).sort()).toEqual(
+      [BRAND_ID_A, BRAND_ID_B].sort(),
+    )
+
+    expect(result.ok).toBe(true)
+  })
+
+  it('P-CUST-6: retorna CONFLICT quando o e-mail já tem users_profile (duplicata real)', async () => {
+    const serverClient = {
+      auth: { getUser: vi.fn().mockResolvedValue(makeAuthUser()) },
+      from: vi.fn().mockReturnValue(makeChain({ data: null, error: null })),
+    }
+
+    const inviteUserByEmail = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: 'A user with this email address has already been registered' },
+    })
+    const usersProfileTable = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: { id: CUSTOMER_ID }, error: null }),
+    }
+    const adminClient = {
+      auth: { admin: { inviteUserByEmail, listUsers: vi.fn() } },
+      from: vi.fn().mockImplementation((table: string) =>
+        table === 'users_profile' ? usersProfileTable : { upsert: vi.fn() },
+      ),
+    }
+
+    vi.mocked(createServerSupabaseClient).mockResolvedValue(serverClient as never)
+    vi.mocked(createServiceRoleSupabaseClient).mockReturnValue(adminClient as never)
+
+    const result = await inviteCustomer({ email: 'ana@loja.com', fullName: 'Ana Silva' })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error.code).toBe('CONFLICT')
+  })
+
+  it('P-CUST-7: recupera usuário órfão em auth.users (sem users_profile) e completa o convite', async () => {
+    const ORPHAN_ID = '00000000-0000-0000-0000-000000000099'
+    const brandAccessUpsert = vi.fn().mockResolvedValue({ data: null, error: null })
+    const serverClient = {
+      auth: { getUser: vi.fn().mockResolvedValue(makeAuthUser()) },
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'brands') {
+          return { select: vi.fn().mockResolvedValue({ data: MOCK_BRANDS, error: null }) }
+        }
+        if (table === 'user_brand_access') {
+          return { upsert: brandAccessUpsert }
+        }
+        return makeChain({ data: null, error: null })
+      }),
+    }
+
+    const inviteUserByEmail = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: 'A user with this email address has already been registered' },
+    })
+    const listUsers = vi.fn().mockResolvedValue({
+      data: { users: [{ id: ORPHAN_ID, email: 'orfao@loja.com' }] },
+      error: null,
+    })
+    const usersProfileTable = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }
+    const adminClient = {
+      auth: { admin: { inviteUserByEmail, listUsers } },
+      from: vi.fn().mockImplementation((table: string) =>
+        table === 'users_profile' ? usersProfileTable : { upsert: vi.fn() },
+      ),
+    }
+
+    vi.mocked(createServerSupabaseClient).mockResolvedValue(serverClient as never)
+    vi.mocked(createServiceRoleSupabaseClient).mockReturnValue(adminClient as never)
+
+    const result = await inviteCustomer({ email: 'orfao@loja.com', fullName: 'Órfão Recuperado' })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.userId).toBe(ORPHAN_ID)
+    expect(usersProfileTable.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ id: ORPHAN_ID }),
+      { onConflict: 'id' },
+    )
   })
 })
 
@@ -275,7 +386,7 @@ describe('N-CUST-1: PERMISSION_DENIED quando user é null', () => {
   })
 
   it('inviteCustomer retorna PERMISSION_DENIED', async () => {
-    const result = await inviteCustomer({ email: 'x@x.com', fullName: 'X', brandIds: [] })
+    const result = await inviteCustomer({ email: 'x@x.com', fullName: 'X' })
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error.code).toBe('PERMISSION_DENIED')

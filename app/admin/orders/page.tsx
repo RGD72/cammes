@@ -1,6 +1,7 @@
 import { getAdminOrders } from '@/lib/orders/admin-actions'
 import { listAdminBrands } from '@/lib/brands/actions'
 import { OrderFilters } from '@/components/admin/order-filters'
+import { formatPriceBRL } from '@/lib/format/currency'
 import type { AdminOrderFilters } from '@/lib/orders/admin-actions'
 import type { OrderStatus } from '@/lib/types/index'
 
@@ -97,7 +98,7 @@ export default async function AdminOrdersPage({
                     <td className="py-2 pr-4 whitespace-nowrap">{formatDate(row.submitted_at)}</td>
                     <td className="py-2 pr-4">{row.brands?.name ?? '—'}</td>
                     <td className="py-2 pr-4">{row.customer_name}</td>
-                    <td className="py-2 pr-4">R$ {row.total_brl.toFixed(2)}</td>
+                    <td className="py-2 pr-4">{formatPriceBRL(row.total_brl)}</td>
                     <td className="py-2 pr-4">
                       {row.status === 'viewed' ? (
                         <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800">

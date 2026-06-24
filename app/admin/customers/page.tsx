@@ -1,5 +1,4 @@
 import { listAdminCustomers } from '@/lib/customers/actions'
-import { listAdminBrands } from '@/lib/brands/actions'
 import { listPendingDeletionRequests } from '@/lib/deletion/actions'
 import { InviteCustomerModal } from '@/components/admin/invite-customer-modal'
 import Link from 'next/link'
@@ -14,9 +13,8 @@ function formatDate(iso: string | null): string {
 }
 
 export default async function AdminCustomersPage() {
-  const [result, brands, deletionResult] = await Promise.all([
+  const [result, deletionResult] = await Promise.all([
     listAdminCustomers(),
-    listAdminBrands(),
     listPendingDeletionRequests(),
   ])
 
@@ -29,7 +27,7 @@ export default async function AdminCustomersPage() {
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Clientes</h1>
-        <InviteCustomerModal brands={brands.map((b) => ({ id: b.id, name: b.name }))} />
+        <InviteCustomerModal />
       </div>
 
       {!result.ok && (

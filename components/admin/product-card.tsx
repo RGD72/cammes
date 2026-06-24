@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { updateProduct, deleteProduct } from '@/lib/products/actions'
 import { TagListEditor } from '@/components/admin/tag-list-editor'
+import { formatPriceBRL, formatPriceInputBRL, parsePriceInputBRL } from '@/lib/format/currency'
 import type { Product } from '@/lib/products/actions'
 
 function getConfidenceLevel(
@@ -25,12 +26,13 @@ const CONFIDENCE_BADGE: Record<'high' | 'medium' | 'low', { label: string; class
 
 interface InlineFieldProps {
   value: string
+  displayValue?: string
   multiline?: boolean
   inputProps?: React.InputHTMLAttributes<HTMLInputElement>
   onSave: (v: string) => Promise<void>
 }
 
-function InlineField({ value, multiline, inputProps, onSave }: InlineFieldProps) {
+function InlineField({ value, displayValue, multiline, inputProps, onSave }: InlineFieldProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   const [isPending, startTransition] = useTransition()
@@ -76,7 +78,100 @@ function InlineField({ value, multiline, inputProps, onSave }: InlineFieldProps)
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setDraft(value); setEditing(true) } }}
       className="cursor-pointer rounded px-1 hover:bg-muted text-sm"
     >
+      {displayValue ?? (value || <span className="text-foreground/30 italic">—</span>)}
+    </span>
+  )
+}
+
+const NEW_LOOK_OPTION = '__new__'
+
+interface LookFieldProps {
+  value: string
+  availableLooks: string[]
+  onSave: (v: string) => Promise<void>
+}
+
+function LookField({ value, availableLooks, onSave }: LookFieldProps) {
+  const [editing, setEditing] = useState(false)
+  const [creatingNew, setCreatingNew] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const [isPending, startTransition] = useTransition()
+
+  function commit(next: string) {
+    if (next === value) {
+      setEditing(false)
+      setCreatingNew(false)
+      return
+    }
+    startTransition(async () => {
+      await onSave(next)
+      setEditing(false)
+      setCreatingNew(false)
+    })
+  }
+
+  function cancel() {
+    setDraft(value)
+    setEditing(false)
+    setCreatingNew(false)
+  }
+
+  if (editing && creatingNew) {
+    return (
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => commit(draft.trim())}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit(draft.trim())
+          if (e.key === 'Escape') cancel()
+        }}
+        autoFocus
+        disabled={isPending}
+        placeholder="Nome do novo LOOK…"
+        className="w-full rounded border border-primary px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+      />
+    )
+  }
+
+  if (editing) {
+    return (
+      <select
+        value={value}
+        onChange={(e) => {
+          if (e.target.value === NEW_LOOK_OPTION) {
+            setDraft('')
+            setCreatingNew(true)
+            return
+          }
+          commit(e.target.value)
+        }}
+        onBlur={cancel}
+        autoFocus
+        disabled={isPending}
+        className="w-full rounded border border-primary px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+      >
+        <option value="">— Sem LOOK —</option>
+        {availableLooks.map((look) => (
+          <option key={look} value={look}>
+            {look}
+          </option>
+        ))}
+        <option value={NEW_LOOK_OPTION}>+ Novo LOOK…</option>
+      </select>
+    )
+  }
+
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={() => setEditing(true)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setEditing(true) }}
+      className="inline-flex items-center gap-1 cursor-pointer rounded px-1 hover:bg-muted text-sm"
+    >
       {value || <span className="text-foreground/30 italic">—</span>}
+      <span className="text-foreground/30 text-xs" aria-hidden>▾</span>
     </span>
   )
 }
@@ -115,8 +210,7 @@ export function ProductCard({
 
     let value: string | number | null = rawValue
     if (field === 'price_brl') {
-      const parsed = parseFloat(rawValue.replace(',', '.'))
-      value = isNaN(parsed) ? null : parsed
+      value = parsePriceInputBRL(rawValue)
     } else if (field === 'look_group') {
       value = rawValue.trim() || null
     }
@@ -250,7 +344,9 @@ export function ProductCard({
         <div>
           <p className="text-xs text-foreground/50 mb-0.5">Preço</p>
           <InlineField
-            value={localProduct.price_brl != null ? String(localProduct.price_brl) : ''}
+            value={localProduct.price_brl != null ? formatPriceInputBRL(localProduct.price_brl) : ''}
+            displayValue={localProduct.price_brl != null ? formatPriceBRL(localProduct.price_brl) : undefined}
+            inputProps={{ inputMode: 'decimal', placeholder: '0,00' }}
             onSave={(v) => handleSave('price_brl', v)}
           />
         </div>
@@ -271,16 +367,11 @@ export function ProductCard({
 
         <div>
           <p className="text-xs text-foreground/50 mb-0.5">LOOK</p>
-          <InlineField
+          <LookField
             value={localProduct.look_group ?? ''}
-            inputProps={{ list: `looks-${localProduct.id}` }}
+            availableLooks={availableLooks}
             onSave={(v) => handleSave('look_group', v)}
           />
-          <datalist id={`looks-${localProduct.id}`}>
-            {availableLooks.map((look) => (
-              <option key={look} value={look} />
-            ))}
-          </datalist>
         </div>
 
         <div className="mt-auto flex items-center justify-between gap-2 pt-1">

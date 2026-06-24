@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { getOrder } from '@/lib/orders/actions'
 import { markOrderViewed } from '@/lib/orders/admin-actions'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { formatPriceBRL } from '@/lib/format/currency'
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -43,7 +44,7 @@ export default async function AdminOrderDetailPage({
           <p className="mt-1 text-sm text-foreground/60">
             {formatDate(order.submitted_at)} · {brand?.name ?? order.brand_id} · {order.customer_name}
           </p>
-          <p className="mt-1 text-sm font-medium">Total: R$ {order.total_brl.toFixed(2)}</p>
+          <p className="mt-1 text-sm font-medium">Total: {formatPriceBRL(order.total_brl)}</p>
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -106,8 +107,8 @@ export default async function AdminOrderDetailPage({
                 <td className="py-2 pr-3">{item.size ?? '—'}</td>
                 <td className="py-2 pr-3">{item.quantity}</td>
                 <td className="py-2 pr-3">{item.customer_name}</td>
-                <td className="py-2 pr-3">R$ {item.unit_price_brl.toFixed(2)}</td>
-                <td className="py-2">R$ {item.total_brl.toFixed(2)}</td>
+                <td className="py-2 pr-3">{formatPriceBRL(item.unit_price_brl)}</td>
+                <td className="py-2">{formatPriceBRL(item.total_brl)}</td>
               </tr>
             ))}
           </tbody>

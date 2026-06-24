@@ -121,7 +121,7 @@ export async function listAdminCustomers(): Promise<Result<AdminCustomer[]>> {
 export async function inviteCustomer(input: {
   email: string
   fullName: string
-  brandIds: string[]
+  phone?: string
 }): Promise<Result<{ userId: string }>> {
   const supabase = await createServerSupabaseClient()
   const {
@@ -140,14 +140,36 @@ export async function inviteCustomer(input: {
     },
   )
 
+  let invitedUserId: string
+
   if (inviteError) {
-    if (inviteError.message.toLowerCase().includes('already been registered')) {
+    if (!inviteError.message.toLowerCase().includes('already been registered')) {
+      return internalError(inviteError.message)
+    }
+
+    // auth.users já tem esse e-mail. Pode ser duplicata real (já tem users_profile)
+    // ou um registro órfão de um convite anterior que falhou antes de criar o profile.
+    const { data: existingProfile } = await adminClient
+      .from('users_profile')
+      .select('id')
+      .eq('email', input.email)
+      .maybeSingle()
+    if (existingProfile) {
       return conflictError('E-mail já cadastrado.')
     }
-    return internalError(inviteError.message)
-  }
 
-  const invitedUserId = inviteData.user.id
+    const { data: listData, error: listError } = await adminClient.auth.admin.listUsers({
+      perPage: 1000,
+    })
+    if (listError) return internalError(listError.message)
+    const orphan = listData.users.find(
+      (u) => u.email?.toLowerCase() === input.email.toLowerCase(),
+    )
+    if (!orphan) return conflictError('E-mail já cadastrado.')
+    invitedUserId = orphan.id
+  } else {
+    invitedUserId = inviteData.user.id
+  }
 
   // Create users_profile for invited user (bypasses RLS — invited user has no session yet)
   const { error: profileError } = await adminClient.from('users_profile').upsert(
@@ -156,27 +178,36 @@ export async function inviteCustomer(input: {
       role: 'customer',
       full_name: input.fullName,
       email: input.email,
+      phone: input.phone?.trim() || null,
       is_active: true,
     },
     { onConflict: 'id' },
   )
   if (profileError) return internalError(profileError.message)
 
-  // Grant brand access
-  if (input.brandIds.length > 0) {
-    const { error: accessError } = await supabase.from('user_brand_access').insert(
-      input.brandIds.map((brandId) => ({
+  // Acesso por padrão a todas as marcas do admin — restringir a uma marca específica
+  // é um passo posterior, feito via CustomerBrandManager na página do cliente.
+  const { data: adminBrands, error: brandsError } = await supabase.from('brands').select('id')
+  if (brandsError) return internalError(brandsError.message)
+
+  const brandIds = (adminBrands ?? []).map((b: { id: string }) => b.id)
+  if (brandIds.length > 0) {
+    const { error: accessError } = await supabase.from('user_brand_access').upsert(
+      brandIds.map((brandId) => ({
         user_id: invitedUserId,
         brand_id: brandId,
         granted_by: user.id,
+        granted_at: new Date().toISOString(),
+        revoked_at: null,
       })),
+      { onConflict: 'user_id,brand_id' },
     )
     if (accessError) return internalError(accessError.message)
   }
 
   await logAuditEvent('customer_invited', {
     email: input.email,
-    brandIds: input.brandIds,
+    brandIds,
     invitedBy: user.id,
   })
 
