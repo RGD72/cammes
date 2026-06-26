@@ -149,7 +149,7 @@ describe('listAdminCustomers', () => {
 // ---- inviteCustomer ---------------------------------------------------------
 
 describe('inviteCustomer', () => {
-  it('P-CUST-2: chama inviteUserByEmail e concede acesso a todas as marcas do admin por padrão', async () => {
+  it('P-CUST-2: chama createUser com senha padrão e concede acesso a todas as marcas do admin por padrão', async () => {
     const brandAccessUpsert = vi.fn().mockResolvedValue({ data: null, error: null })
     const serverClient = {
       auth: { getUser: vi.fn().mockResolvedValue(makeAuthUser()) },
@@ -164,7 +164,7 @@ describe('inviteCustomer', () => {
       }),
     }
 
-    const inviteUserByEmail = vi.fn().mockResolvedValue({
+    const createUser = vi.fn().mockResolvedValue({
       data: { user: { id: CUSTOMER_ID } },
       error: null,
     })
@@ -175,7 +175,7 @@ describe('inviteCustomer', () => {
       upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
     }
     const adminClient = {
-      auth: { admin: { inviteUserByEmail, listUsers: vi.fn() } },
+      auth: { admin: { createUser, listUsers: vi.fn(), updateUserById: vi.fn() } },
       from: vi.fn().mockImplementation((table: string) =>
         table === 'users_profile' ? usersProfileTable : { upsert: vi.fn() },
       ),
@@ -190,10 +190,12 @@ describe('inviteCustomer', () => {
       phone: '11999999999',
     })
 
-    expect(inviteUserByEmail).toHaveBeenCalledOnce()
-    const [emailArg, opts] = inviteUserByEmail.mock.calls[0]
-    expect(emailArg).toBe('ana@loja.com')
-    expect(opts.redirectTo).toContain('/auth/callback')
+    expect(createUser).toHaveBeenCalledOnce()
+    const [opts] = createUser.mock.calls[0]
+    expect(opts.email).toBe('ana@loja.com')
+    expect(opts.password).toBe('123456')
+    expect(opts.email_confirm).toBe(true)
+    expect(opts.user_metadata).toEqual({ full_name: 'Ana Silva' })
 
     expect(usersProfileTable.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ id: CUSTOMER_ID, phone: '11999999999' }),
@@ -207,6 +209,9 @@ describe('inviteCustomer', () => {
     )
 
     expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.userId).toBe(CUSTOMER_ID)
+    expect(result.data.defaultPassword).toBe('123456')
   })
 
   it('P-CUST-6: retorna CONFLICT quando o e-mail já tem users_profile (duplicata real)', async () => {
@@ -215,9 +220,9 @@ describe('inviteCustomer', () => {
       from: vi.fn().mockReturnValue(makeChain({ data: null, error: null })),
     }
 
-    const inviteUserByEmail = vi.fn().mockResolvedValue({
+    const createUser = vi.fn().mockResolvedValue({
       data: null,
-      error: { message: 'A user with this email address has already been registered' },
+      error: { code: 'email_exists', message: 'A user with this email address has already been registered' },
     })
     const usersProfileTable = {
       select: vi.fn().mockReturnThis(),
@@ -225,7 +230,7 @@ describe('inviteCustomer', () => {
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: CUSTOMER_ID }, error: null }),
     }
     const adminClient = {
-      auth: { admin: { inviteUserByEmail, listUsers: vi.fn() } },
+      auth: { admin: { createUser, listUsers: vi.fn(), updateUserById: vi.fn() } },
       from: vi.fn().mockImplementation((table: string) =>
         table === 'users_profile' ? usersProfileTable : { upsert: vi.fn() },
       ),
@@ -257,14 +262,15 @@ describe('inviteCustomer', () => {
       }),
     }
 
-    const inviteUserByEmail = vi.fn().mockResolvedValue({
+    const createUser = vi.fn().mockResolvedValue({
       data: null,
-      error: { message: 'A user with this email address has already been registered' },
+      error: { code: 'email_exists', message: 'A user with this email address has already been registered' },
     })
     const listUsers = vi.fn().mockResolvedValue({
       data: { users: [{ id: ORPHAN_ID, email: 'orfao@loja.com' }] },
       error: null,
     })
+    const updateUserById = vi.fn().mockResolvedValue({ data: { user: { id: ORPHAN_ID } }, error: null })
     const usersProfileTable = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -272,7 +278,7 @@ describe('inviteCustomer', () => {
       upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
     }
     const adminClient = {
-      auth: { admin: { inviteUserByEmail, listUsers } },
+      auth: { admin: { createUser, listUsers, updateUserById } },
       from: vi.fn().mockImplementation((table: string) =>
         table === 'users_profile' ? usersProfileTable : { upsert: vi.fn() },
       ),
@@ -286,6 +292,10 @@ describe('inviteCustomer', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.data.userId).toBe(ORPHAN_ID)
+    expect(updateUserById).toHaveBeenCalledWith(ORPHAN_ID, {
+      password: '123456',
+      email_confirm: true,
+    })
     expect(usersProfileTable.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ id: ORPHAN_ID }),
       { onConflict: 'id' },
