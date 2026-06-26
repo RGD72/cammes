@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { getBrandBySlug } from '@/lib/brands/actions'
 import { getCatalogByBrand } from '@/lib/catalogs/actions'
 import { getApprovedProductsForStorefront } from '@/lib/products/actions'
+import { getCart } from '@/lib/carts/actions'
 import { BrandStorefrontView } from './brand-storefront-view'
 
 interface Props {
@@ -22,10 +23,15 @@ export default async function BrandStorefrontPage({ params }: Props) {
 
   if (!brand) notFound()
 
-  const [catalog, products] = await Promise.all([
+  const [catalog, products, cartResult] = await Promise.all([
     getCatalogByBrand(brand.id),
     getApprovedProductsForStorefront(brand.id),
+    getCart(brand.id),
   ])
+
+  const cartItemCount = cartResult.ok
+    ? cartResult.data.items.reduce((sum, item) => sum + item.quantity, 0)
+    : 0
 
   return (
     <BrandStorefrontView
@@ -33,6 +39,7 @@ export default async function BrandStorefrontPage({ params }: Props) {
       products={products}
       catalogId={catalog?.id ?? null}
       isPreview={!brand.published}
+      cartItemCount={cartItemCount}
     />
   )
 }

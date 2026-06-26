@@ -52,6 +52,31 @@ Se o documento não contiver produtos, retorne:
 
 Regras: retorne null para campos ausentes; sizes e colors devem ser arrays; price_brl deve ser número decimal; source_page deve ser o número inteiro da página; responda APENAS com JSON válido, sem markdown.`
 
+// Espelha lib/products/sizing.ts — Deno Edge Functions não importam módulos
+// Next.js (@/lib/...), então a lógica é duplicada aqui em TS puro.
+const LETTER_SIZES = ['PP', 'P', 'M', 'G']
+const NUMERIC_SIZES = ['36', '38', '40', '42', '44']
+const LETTER_FORMAT_STEMS = ['jaqueta', 'casaco', 'camiseta', 'camisa']
+
+function defaultSizesForDescription(description: string | null): string[] {
+  const normalized = (description ?? '').toLowerCase()
+  return LETTER_FORMAT_STEMS.some((stem) => normalized.includes(stem))
+    ? [...LETTER_SIZES]
+    : [...NUMERIC_SIZES]
+}
+
+// O modelo às vezes retorna um único elemento "36,38,40,42,46" em vez de itens
+// separados — normaliza para o preset padrão sempre que sizes não bater
+// exatamente com um dos dois formatos suportados.
+function normalizeSizes(sizes: string[], description: string | null): string[] {
+  if (sizes.length === 0) return defaultSizesForDescription(description)
+  const upper = sizes.map((s) => s.trim().toUpperCase())
+  const isLetter = upper.every((s) => (LETTER_SIZES as string[]).includes(s))
+  const isNumeric = upper.every((s) => (NUMERIC_SIZES as string[]).includes(s))
+  if (isLetter || isNumeric) return sizes
+  return defaultSizesForDescription(description)
+}
+
 const MODEL_PRICING: Record<string, number> = {
   'google/gemini-2.5-flash': 0.0004,
   'google/gemini-pro-vision': 0.001,
@@ -202,7 +227,7 @@ async function processExtraction(payload: {
         extraction_job_id: jobId,
         reference: p.reference ?? null,
         description: p.description ?? null,
-        sizes: p.sizes ?? [],
+        sizes: normalizeSizes(p.sizes ?? [], p.description ?? null),
         colors: p.colors ?? [],
         price_brl: p.price_brl ?? null,
         look_group: p.look_group ?? null,

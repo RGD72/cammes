@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useTransition } from 'react'
+import Link from 'next/link'
 import { ProductGridCard } from '@/components/brands/product-grid-card'
 import { SelectProductModal } from '@/components/brands/select-product-modal'
 import { getCatalogSignedUrl } from '@/lib/catalogs/actions'
@@ -12,9 +13,16 @@ interface Props {
   products: Product[]
   catalogId: string | null
   isPreview?: boolean
+  cartItemCount?: number
 }
 
-export function BrandStorefrontView({ brand, products, catalogId, isPreview = false }: Props) {
+export function BrandStorefrontView({
+  brand,
+  products,
+  catalogId,
+  isPreview = false,
+  cartItemCount = 0,
+}: Props) {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedLooks, setSelectedLooks] = useState<string[]>([])
@@ -107,16 +115,29 @@ export function BrandStorefrontView({ brand, products, catalogId, isPreview = fa
             <p className="text-sm text-foreground/60 mt-1">{brand.description}</p>
           )}
         </div>
-        {catalogId && (
-          <button
-            onClick={handlePdfDownload}
-            disabled={isPdfPending}
-            aria-busy={isPdfPending}
-            className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+        <div className="flex items-center gap-2">
+          {catalogId && (
+            <button
+              onClick={handlePdfDownload}
+              disabled={isPdfPending}
+              aria-busy={isPdfPending}
+              className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+            >
+              {isPdfPending ? 'Gerando link…' : 'Baixar catálogo PDF'}
+            </button>
+          )}
+          <Link
+            href={`/cart/${brand.slug}`}
+            className="relative inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
           >
-            {isPdfPending ? 'Gerando link…' : 'Baixar catálogo PDF'}
-          </button>
-        )}
+            Carrinho
+            {cartItemCount > 0 && (
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">
+                {cartItemCount}
+              </span>
+            )}
+          </Link>
+        </div>
       </div>
 
       {/* Search & Filters */}
@@ -211,6 +232,7 @@ export function BrandStorefrontView({ brand, products, catalogId, isPreview = fa
         <SelectProductModal
           product={modalProduct}
           brandId={brand.id}
+          brandSlug={brand.slug}
           onClose={() => setModalProduct(null)}
         />
       )}

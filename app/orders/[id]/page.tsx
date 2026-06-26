@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getOrder } from '@/lib/orders/actions'
 
@@ -31,6 +32,9 @@ export default async function OrderDetailPage({ params }: Props) {
 
   return (
     <div className="mx-auto max-w-6xl p-4 md:p-8">
+      <Link href="/orders" className="mb-4 inline-block text-sm text-muted-foreground hover:underline">
+        ← Meus pedidos
+      </Link>
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Pedido {order.order_number}</h1>

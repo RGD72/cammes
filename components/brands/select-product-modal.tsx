@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { addItem } from '@/lib/carts/actions'
 import type { Product } from '@/lib/products/actions'
@@ -54,10 +55,11 @@ function useFocusTrap(active: boolean) {
 interface Props {
   product: Product
   brandId: string
+  brandSlug: string
   onClose: () => void
 }
 
-export function SelectProductModal({ product, brandId, onClose }: Props) {
+export function SelectProductModal({ product, brandId, brandSlug, onClose }: Props) {
   const colors = product.colors ?? []
   const sizes = product.sizes ?? []
 
@@ -65,6 +67,7 @@ export function SelectProductModal({ product, brandId, onClose }: Props) {
   const [selectedSize, setSelectedSize] = useState<string | null>(sizes[0] ?? null)
   const [quantity, setQuantity] = useState(1)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   const dialogRef = useFocusTrap(true)
 
@@ -88,7 +91,13 @@ export function SelectProductModal({ product, brandId, onClose }: Props) {
         unitPriceBrl: product.price_brl!,
       })
       if (result.ok) {
-        toast.success('Produto adicionado ao carrinho!')
+        toast.success('Produto adicionado ao carrinho!', {
+          action: {
+            label: 'Ver carrinho',
+            onClick: () => router.push(`/cart/${brandSlug}`),
+          },
+        })
+        router.refresh()
         onClose()
       } else {
         toast.error(result.error.message)

@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getCart, updateQuantity, removeItem, clearCart } from '@/lib/carts/actions'
@@ -31,12 +32,12 @@ export default async function CartPage({ params }: Props) {
           <p className="text-base font-medium text-muted-foreground">
             Seu carrinho está vazio. Volte à vitrine e escolha produtos.
           </p>
-          <a
+          <Link
             href={`/brands/${brand_slug}`}
             className="mt-4 text-sm font-medium text-primary underline"
           >
             Ver vitrine
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -72,6 +73,12 @@ export default async function CartPage({ params }: Props) {
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
+      <Link
+        href={`/brands/${brand_slug}`}
+        className="mb-4 inline-block text-sm text-muted-foreground hover:underline"
+      >
+        ← Voltar à vitrine
+      </Link>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">Carrinho — {brandName}</h1>
         <form action={handleClearCart}>

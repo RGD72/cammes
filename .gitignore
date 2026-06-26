@@ -64,3 +64,6 @@ supabase/.temp/
 # --- Backup files ---
 *.backup.*
 *.backup
+
+# --- Playwright MCP test artifacts ---
+.playwright-mcp/

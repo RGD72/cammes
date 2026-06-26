@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { LogoutButton } from '@/components/ui/logout-button'
 import { Toaster } from 'sonner'
@@ -18,7 +19,17 @@ export default async function BrandsLayout({ children }: { children: React.React
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
         <div className="flex items-center justify-between px-4 py-3">
-          <span className="font-semibold">CAMMES</span>
+          <div className="flex items-center gap-6">
+            <span className="font-semibold">CAMMES</span>
+            <nav className="flex items-center gap-4 text-sm">
+              <Link href="/brands" className="text-muted-foreground hover:text-foreground">
+                Marcas
+              </Link>
+              <Link href="/orders" className="text-muted-foreground hover:text-foreground">
+                Meus pedidos
+              </Link>
+            </nav>
+          </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">{name}</span>
             <LogoutButton />

@@ -247,6 +247,26 @@ export async function submitOrder(
   }
 }
 
+export async function getMyOrders(): Promise<
+  Result<Array<Order & { brands: { name: string; slug: string } | null }>>
+> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return permissionDenied()
+
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*, brands(name, slug)')
+    .eq('customer_user_id', user.id)
+    .order('submitted_at', { ascending: false })
+
+  if (error) return internalError('Erro ao buscar pedidos')
+
+  return { ok: true, data: (data ?? []) as Array<Order & { brands: { name: string; slug: string } | null }> }
+}
+
 export async function getOrder(
   orderId: string,
 ): Promise<Result<{ order: Order; items: OrderItem[] }>> {

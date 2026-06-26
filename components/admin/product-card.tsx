@@ -4,6 +4,12 @@ import { useState, useTransition } from 'react'
 import { updateProduct, deleteProduct } from '@/lib/products/actions'
 import { TagListEditor } from '@/components/admin/tag-list-editor'
 import { formatPriceBRL, formatPriceInputBRL, parsePriceInputBRL } from '@/lib/format/currency'
+import {
+  defaultSizeFormatForDescription,
+  detectSizeFormat,
+  sizesForFormat,
+  type SizeFormat,
+} from '@/lib/products/sizing'
 import type { Product } from '@/lib/products/actions'
 
 function getConfidenceLevel(
@@ -176,6 +182,50 @@ function LookField({ value, availableLooks, onSave }: LookFieldProps) {
   )
 }
 
+interface SizeFormatToggleProps {
+  sizes: string[]
+  description: string | null
+  onChange: (format: SizeFormat) => Promise<void>
+}
+
+function SizeFormatToggle({ sizes, description, onChange }: SizeFormatToggleProps) {
+  const [isPending, startTransition] = useTransition()
+  const activeFormat = detectSizeFormat(sizes) ?? defaultSizeFormatForDescription(description)
+
+  function handleClick(format: SizeFormat) {
+    if (format === activeFormat) return
+    startTransition(() => onChange(format))
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-foreground/50 mb-0.5">Tamanhos</p>
+      <div className="inline-flex rounded-md border border-border overflow-hidden text-xs font-medium">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => handleClick('letter')}
+          className={`px-2 py-1 transition-colors disabled:opacity-50 ${
+            activeFormat === 'letter' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+          }`}
+        >
+          PP, P, M, G
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => handleClick('numeric')}
+          className={`px-2 py-1 border-l border-border transition-colors disabled:opacity-50 ${
+            activeFormat === 'numeric' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+          }`}
+        >
+          36-44
+        </button>
+      </div>
+    </div>
+  )
+}
+
 interface ProductCardProps {
   product: Product
   selected: boolean
@@ -256,6 +306,10 @@ export function ProductCard({
       setLocalProduct(merged)
       onProductUpdate(merged)
     }
+  }
+
+  function handleSizeFormatChange(format: SizeFormat) {
+    return handleSaveTags('sizes', sizesForFormat(format))
   }
 
   function handleConfirmDelete() {
@@ -351,11 +405,10 @@ export function ProductCard({
           />
         </div>
 
-        <TagListEditor
-          label="Tamanhos"
-          values={localProduct.sizes ?? []}
-          onChange={(next) => handleSaveTags('sizes', next)}
-          placeholder="Ex: P, M, G…"
+        <SizeFormatToggle
+          sizes={localProduct.sizes ?? []}
+          description={localProduct.description}
+          onChange={handleSizeFormatChange}
         />
 
         <TagListEditor
