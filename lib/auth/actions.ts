@@ -72,11 +72,17 @@ export async function requestPasswordResetAction(
     headersList.get('origin') ?? process.env.NEXT_PUBLIC_SITE_URL ?? ''
 
   const supabase = await createServerSupabaseClient()
-  await supabase.auth.resetPasswordForEmail(email, {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${origin}/auth/callback?next=/reset-password`,
   })
 
-  // Sempre retorna sucesso — não revela se o e-mail existe (anti-enumeration)
+  // Limite de envio de e-mail (infra) é um erro real e transitório — não tem relação
+  // com a existência do e-mail, então pode ser exposto sem violar o anti-enumeration.
+  if (error?.code === 'over_email_send_rate_limit') {
+    return { error: 'Muitos e-mails enviados recentemente. Tente novamente em alguns minutos.' }
+  }
+
+  // Para qualquer outro caso, sempre retorna sucesso — não revela se o e-mail existe.
   return { success: 'Se esse e-mail estiver cadastrado, você receberá um link em breve.' }
 }
 
